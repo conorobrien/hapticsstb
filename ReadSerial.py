@@ -38,7 +38,7 @@ working_matrix = np.matrix([[ 0.165175269, 	6.193716635,	-0.05972626,	0.02003320
 
 # Open serial port, must try to make this more general later rather than hard-
 # coding it in
-ser = serial.Serial('/dev/tty.usbmodem22491',6900, timeout=0.1)
+ser = serial.Serial('/dev/tty.usbmodem409621',6900, timeout=0.1)
 bias_sample = 500
 line_length = 200
 
@@ -119,11 +119,13 @@ while 1:
 		print 'MISSED PACKET', packet, packet_old
 
 	packet_old = packet
-
-	FT = Raw2FT(dat, working_matrix, bias)
-	FX.append(FT.item(0))
-	FY.append(FT.item(1))
-	FZ.append(FT.item(2))
+	FX.append(Raw2Volts(dat[0:2]))
+	FX.append(Raw2Volts(dat[2:4]))
+	FY.append(Raw2Volts(dat[4:6]))
+	# FT = Raw2FT(dat, working_matrix, bias)
+	# FX.append(FT.item(0))
+	# FY.append(FT.item(1))
+	# FZ.append(FT.item(2))
 
 	# Update figure every ten samples
 	if i % 10 == 0:

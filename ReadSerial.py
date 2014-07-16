@@ -10,9 +10,9 @@ def Raw2Volts(x):
 	# given in twos complement formal
 	y = (ord(x[0])<<8) + ord(x[1])
 	if y > 2048:
-		return (y - 4096)*0.0025
+		return (y - 4096)#*0.0025
 	else:
-		return y*0.0025
+		return y#*0.0025
 
 def Raw2FT(x, FT_transform, bias):
 	# Takes a serial packet 'x', 6x6 matrix 'FT_transform', and a 1x6 vector
@@ -39,8 +39,9 @@ working_matrix = np.matrix([[ 0.165175269, 	6.193716635,	-0.05972626,	0.02003320
 # Open serial port, must try to make this more general later rather than hard-
 # coding it in
 ser = serial.Serial('/dev/tty.usbmodem409621',6900, timeout=0.1)
+# ser = serial.Serial('/dev/tty.usbmodem22491',6900, timeout=0.1)
 bias_sample = 500
-line_length = 200
+line_length = 100
 
 # Initialize lists and arrays, no preallocation yet, will start writing these
 # to files
@@ -58,7 +59,7 @@ B6 = np.array([])
 
 # Start interactive plot, initialize line objects
 pl.ion()
-pl.axis([0,line_length,-20,20])
+pl.axis([0,line_length,-3000,3000])
 
 FXline, = pl.plot([0] * line_length, color = 'red')
 FYline, = pl.plot([0] * line_length, color = 'green')
@@ -120,15 +121,18 @@ while 1:
 
 	packet_old = packet
 	FX.append(Raw2Volts(dat[0:2]))
-	FX.append(Raw2Volts(dat[2:4]))
-	FY.append(Raw2Volts(dat[4:6]))
+	FY.append(Raw2Volts(dat[2:4]))
+	FZ.append(Raw2Volts(dat[4:6]))
+	# FX.append(Raw2Volts(dat[6:8]))
+	# FY.append(Raw2Volts(dat[8:10]))
+	# FZ.append(Raw2Volts(dat[10:12]))
 	# FT = Raw2FT(dat, working_matrix, bias)
 	# FX.append(FT.item(0))
 	# FY.append(FT.item(1))
 	# FZ.append(FT.item(2))
 
 	# Update figure every ten samples
-	if i % 10 == 0:
+	if i % 20 == 0:
 
 		FXline.set_ydata(FX[(len(FX) - line_length):len(FX)])
 		FYline.set_ydata(FY[(len(FY) - line_length):len(FY)])

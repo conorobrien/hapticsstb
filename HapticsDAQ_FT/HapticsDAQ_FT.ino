@@ -77,7 +77,7 @@ void readADC_FT(void)
 
 	// Send conv start byte for next IRQ
 	digitalWrite(CS_FT, LOW);
-	SPI.transfer(conv_ft);
+	SPI.transfer(CONV_FT);
 	digitalWrite(CS_FT, HIGH);
 
 }
@@ -94,8 +94,8 @@ void setup(void)
 {
 	//define setup and conversion bits
 
-	setup_ft = setupReg(CLOCK_MODE10, REF_INT_NODELAY, BIPOLAR); //0x6b
-	conv_ft = convReg(11, SCAN_MODE00, 0);
+	setup_ft = SETUP_FT ; //setupReg(CLOCK_MODE10, REF_INT_NODELAY, BIPOLAR); //0x6b
+	conv_ft = CONV_FT; //convReg(11, SCAN_MODE00, 0);
 
 	// Declare chip select pins, set to idle high
 	pinMode(CS_ACC, OUTPUT);

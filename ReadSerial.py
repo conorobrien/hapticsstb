@@ -1,78 +1,80 @@
+#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import pylab as pl
 import numpy as np
-import serial
-import pdb
+import serial, sys, os, glob, pdb, time
+from HapticsSTB import *
 
-def Raw2Volts(x):
-	# Takes a serial Packet 'x' and returns the 6 channels in Volts, Data is
-	# given in twos complement formal
-	y = (ord(x[0])<<8) + ord(x[1])
-	if y > 2048:
-		return (y - 4096)#*0.0025
-	else:
-		return y#*0.0025
 
-def Raw2FT(x, FT_transform, bias):
-	# Takes a serial packet 'x', 6x6 matrix 'FT_transform', and a 1x6 vector
-	# 'bias', both matrices are Numpy matrices, not arrays. Currently the
-	# channels in x and bias are backwards compared to the transform, theyre
-	# flipped in the code but will change that later to make life easier
-	C = np.matrix([[0.0],[0.0],[0.0],[0.0],[0.0],[0.0]])
-	for i in range(0,6):
-		j = i*2
-		C[i] = Raw2Volts(x[j:(j+2)])
-	FT = FT_transform * (C[::-1] - bias[::-1])
-	return FT
+# Default values for command line inputs, checked right below here
+inputs = {	'graphing' : 0,
+			'line_length': 100,
+			'bias_sample': 100,
+			'update_interval': 20,
+			'sample_length': 5,
+}
 
-# Matrix transform into forces and torques, no transformation needed, just
-# conversion to FT
 
-working_matrix = np.matrix([[ 0.165175269, 	6.193716635,	-0.05972626,	0.020033203, 	-0.136667224, 	-6.42215241	],
-							[ 0.002429674, 	-3.63579423,	0.466390998, 	7.308900211, 	-0.18369186, 	-3.65179797	],
-							[ -10.5385017,	0.802731009,	-10.1357248,	0.359714766,	-10.0934065,	0.442593679	],
-							[ 0.144765089,	-0.032574325,	0.004132077,	0.038285567, 	-0.145061852,	-0.010347366],
-							[ -0.089833077,	-0.024635731,	0.165602185,	-0.009131771,	-0.080132747,	0.039589968	],
-							[ 0.001846317,	0.085776855,	0.005262967,	0.088317691, 	0.001450272,	0.087714269	]]) 
+# Input handling, inputs beginning with '-' are considered commands, following
+# string is converted to an int and assigned to the dictionary
+try:
+	if len(sys.argv) > 1:
+		for arg in range(0,len(sys.argv)):
+			if sys.argv[arg][0] == '-':
+				inputs[sys.argv[arg][1:].lower()] = int(sys.argv[arg+1])
+except:
+	print "Invalid Command!"
 
-# Open serial port, must try to make this more general later rather than hard-
-# coding it in
-ser = serial.Serial('/dev/tty.usbmodem409621',6900, timeout=0.1)
-# ser = serial.Serial('/dev/tty.usbmodem22491',6900, timeout=0.1)
-bias_sample = 500
-line_length = 100
+# Open serial port, if default device not found list alternatives and ask for
+# input
+try:
+	ser = serial.Serial('/dev/tty.usbmodem409621',6900, timeout=0.1)
+except OSError:
+	serial_devices = glob.glob('/dev/tty.usbmodem*')
 
-# Initialize lists and arrays, no preallocation yet, will start writing these
-# to files
+	if serial_devices == []:
+		print "NO SERIAL DEVICE FOUND, EXITING"
+		sys.exit()
 
-FX = [0]*line_length
-FY = [0]*line_length
-FZ = [0]*line_length
+	for dev in range(0,len(serial_devices)):
+		print "%d)" %dev + serial_devices[dev]
 
-B1 = np.array([])
-B2 = np.array([])
-B3 = np.array([])
-B4 = np.array([])
-B5 = np.array([])
-B6 = np.array([])
+	use_device = input("Default device not found; Which do you want? :")
 
-# Start interactive plot, initialize line objects
-pl.ion()
-pl.axis([0,line_length,-3000,3000])
+	try:
+		ser = serial.Serial(serial_devices[use_device],6900, timeout=0.1)
+	except OSError:
+		print serial_devices[dev].upper() + " NOT VALID, EXITING PROGRAM"
+		sys.exit()
 
-FXline, = pl.plot([0] * line_length, color = 'red')
-FYline, = pl.plot([0] * line_length, color = 'green')
-FZline, = pl.plot([0] * line_length, color = 'blue')
+# Graphing Initialization code
+if inputs['graphing']:
 
-pl.draw()
+	line_length = inputs['line_length']
+	pl.ion()
+	pl.axis([0,line_length,-20,20])
 
-packet_old = 0
+	# Start interactive plot, initialize line objects
+
+	Line1, = pl.plot([0] * line_length, color = 'r')
+	Line2, = pl.plot([0] * line_length, color = 'g')
+	Line3, = pl.plot([0] * line_length, color = 'b')
+	Line4, = pl.plot([0] * line_length, color = 'c')
+	Line5, = pl.plot([0] * line_length, color = 'm')
+	Line6, = pl.plot([0] * line_length, color = 'y')
+
+	pl.draw()
+
+# Prep serial connection
 ser.flush()
 
-# take samples and average to get bias vector
+## BIASING
+# read first 500 samples and average to get bias
 
-for ii in range(0, bias_sample):
+bias_hist = np.zeros((6,inputs['bias_sample']))
+
+for ii in range(0, inputs['bias_sample']):
 
 	dat = ser.read(13)
 	
@@ -82,31 +84,25 @@ for ii in range(0, bias_sample):
 
 	packet = ord(dat[12])
 	
-	if packet > (packet_old+1)%256:
+	if ii == 0:
+		packet_old = packet
+	elif (packet > (packet_old+1)%256):
 		print 'MISSED PACKET', packet, packet_old
 
 	packet_old = packet
-	B1 = np.append(B1, Raw2Volts(dat[0:2]))
-	B2 = np.append(B2, Raw2Volts(dat[2:4]))
-	B3 = np.append(B3, Raw2Volts(dat[4:6]))
-	B4 = np.append(B4, Raw2Volts(dat[6:8]))
-	B5 = np.append(B5, Raw2Volts(dat[8:10]))
-	B6 = np.append(B6, Raw2Volts(dat[10:12]))
 
-# Bias should be a numpy matrix for calculations later
-bias = np.matrix([[0.0],[0.0],[0.0],[0.0],[0.0],[0.0]])
-bias[0] = B1.mean()
-bias[1] = B2.mean()
-bias[2] = B3.mean()
-bias[3] = B4.mean()
-bias[4] = B5.mean()
-bias[5] = B6.mean()
+	bias_hist[:,ii] = [Serial2Volts(dat[10:12]),Serial2Volts(dat[8:10]),Serial2Volts(dat[6:8]),
+						Serial2Volts(dat[4:6]),Serial2Volts(dat[2:4]),Serial2Volts(dat[0:2])]
 
+bias = np.mean(bias_hist, axis=1).T
 print 'BIAS MATRIX'
 print bias
 
-i = 0
-while 1:
+
+## SAMPLING
+# Code takes samples for seconds defined in sample_length
+
+for ii in range(0,500*inputs['sample_length']):
 
 	dat = ser.read(13)
 	
@@ -120,49 +116,41 @@ while 1:
 		print 'MISSED PACKET', packet, packet_old
 
 	packet_old = packet
-	FX.append(Raw2Volts(dat[0:2]))
-	FY.append(Raw2Volts(dat[2:4]))
-	FZ.append(Raw2Volts(dat[4:6]))
-	# FX.append(Raw2Volts(dat[6:8]))
-	# FY.append(Raw2Volts(dat[8:10]))
-	# FZ.append(Raw2Volts(dat[10:12]))
-	# FT = Raw2FT(dat, working_matrix, bias)
-	# FX.append(FT.item(0))
-	# FY.append(FT.item(1))
-	# FZ.append(FT.item(2))
 
-	# Update figure every ten samples
-	if i % 20 == 0:
+	FT = Serial2FT(dat, bias)
 
-		FXline.set_ydata(FX[(len(FX) - line_length):len(FX)])
-		FYline.set_ydata(FY[(len(FY) - line_length):len(FY)])
-		FZline.set_ydata(FZ[(len(FZ) - line_length):len(FZ)])
+	if ii == 0:
+		FT_hist = FT
 
-		pl.draw()
+	else:
+		# V = np.array([Serial2Volts(dat[0:2]),Serial2Volts(dat[2:4]),Serial2Volts(dat[4:6]),
+		# 	 Serial2Volts(dat[6:8]),Serial2Volts(dat[8:10]),Serial2Volts(dat[10:12])])
+		FT_hist = np.vstack((FT_hist,FT))
 
-	i = i+1
+	# pdb.set_trace()
 
-## TODO 
+	if inputs['graphing']:
+		if ii % inputs['update_interval'] == 0 and ii > line_length:
+			# pdb.set_trace()
+			Line1.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],0].T)
+			Line2.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],1].T)
+			Line3.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],2].T)
+			Line4.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],3].T)
+			Line5.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],4].T)
+			Line6.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],5].T)
 
-# Figure out quicker way for matrix multiplication. Would be nice to
-# stay in python but not necessary, maybe try porting to MATLAB?
-
-# -Write function in C, try Cython
-
-# -Try julia, not sure about serial though
-
-# -MATLAB
-
-# -Give up and do transform after data collection is over
-
-# -Larger USB packets? Only doing a 13 byte packet, can use up to 64
-#	* This would give more time for processing, but adds data
-
-# -Two-way communication, will need to update status leds, also could give
-# start-end codes and debugging info
+			
+			pl.draw()
 
 
+ser.close()
 
+filename = 'TestData/STBTD_' + time.strftime('%Y-%m-%d_%H:%M') + '.csv'
+try:
+	np.savetxt(filename, FT_hist, delimiter=",")
+except:
+	os.mkdir('TestData')
+	np.savetxt(filename, FT_hist, delimiter=",")
 
 
 

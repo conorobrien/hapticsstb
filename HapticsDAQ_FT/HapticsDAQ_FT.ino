@@ -3,13 +3,16 @@
 
 
 #define RESET 			0x10
+
 #define SETUP_ACC 		0x64
-#define CONV_ACC 		0x90
+#define CONV_ACC 		0xC0
 #define CS_ACC 			7
+
 #define SETUP_FT		0x6B
 #define CONV_FT 		0xD8
 #define CS_FT			9
-#define SAMPLE_RATE 	5000 // Delay in us between samples
+
+#define SAMPLE_RATE 	2000 // Delay in us between samples
 
 #define SCAN_MODE00 	0x0
 #define SCAN_MODE01 	0x1
@@ -32,8 +35,6 @@
 
 
 IntervalTimer irq;
-byte conv_ft;
-byte setup_ft;
 
 
 byte convReg(byte channel, byte scan_mode, byte temp)
@@ -51,7 +52,7 @@ byte setupReg(byte cksel, byte refsel, byte diffsel)
 void readADC_FT(void)
 {
 	static byte j = 0;
-	static byte data[30];
+	static byte data[13];
 	byte i = 0;
 
 	j++;
@@ -59,7 +60,7 @@ void readADC_FT(void)
 	Serial.flush();
 
 	// Read 6 bytes from ADC, conv. bit has already been sent
-	for (i = 0; i < 12; i++)
+	for (i = 0; i < 18; i++)
 	{	
 		digitalWrite(CS_FT, LOW);
 		data[i] = SPI.transfer(0x00);
@@ -67,13 +68,11 @@ void readADC_FT(void)
 		delayMicroseconds(2);
 	}
 
-	digitalWrite(CS_FT, HIGH);
-
 	// Last byte of package is incremented, check for lost packets on master side
-	data[12] = j;
+	data[18] = j;
 
 	// Write data through USB
-	Serial.write(data, 13);
+	Serial.write(data, 19);
 
 	// Send conv start byte for next IRQ
 	digitalWrite(CS_FT, LOW);
@@ -82,6 +81,77 @@ void readADC_FT(void)
 
 }
 
+void readADC_ACC(void)
+{
+	static byte j = 0;
+	static byte data[19];
+	byte i = 0;
+
+	j++;
+
+	Serial.flush();
+
+	// Read 6 bytes from ADC, conv. bit has already been sent
+	for (i = 0; i < 18; i++)
+	{	
+		digitalWrite(CS_ACC, LOW);
+		data[i] = SPI.transfer(0x00);
+		digitalWrite(CS_ACC, HIGH);
+		delayMicroseconds(2);
+	}
+
+	// Last byte of package is incremented, check for lost packets on master side
+	data[18] = j;
+
+	// Write data through USB
+	Serial.write(data, 19);
+
+	// Send conv start byte for next IRQ
+	digitalWrite(CS_ACC, LOW);
+	SPI.transfer(CONV_ACC);
+	digitalWrite(CS_ACC, HIGH);
+
+}
+
+void readADC(void)
+{
+	static byte j = 0;
+	static byte data[31];
+	byte i = 0;
+
+	j++;
+
+	Serial.flush();
+
+	for (i = 0; i < 12; i++)
+	{	
+		digitalWrite(CS_FT, LOW);
+		data[i] = SPI.transfer(0x00);
+		digitalWrite(CS_FT, HIGH);
+		delayMicroseconds(2);
+	}
+
+	for (i = 12; i < 30; i++)
+	{	
+		digitalWrite(CS_ACC, LOW);
+		data[i] = SPI.transfer(0x00);
+		digitalWrite(CS_ACC, HIGH);
+		delayMicroseconds(2);
+	}
+
+	data[30] = j;
+
+	Serial.write(data, 31);
+
+	digitalWrite(CS_FT, LOW);
+	SPI.transfer(CONV_FT);
+	digitalWrite(CS_FT, HIGH);
+
+	digitalWrite(CS_ACC, LOW);
+	SPI.transfer(CONV_ACC);
+	digitalWrite(CS_ACC, HIGH);
+
+}
 void pulseCS(char pin)
 {
 	// Pulses the CS line in between SPI bytes
@@ -90,12 +160,34 @@ void pulseCS(char pin)
 	digitalWrite(pin, LOW);
 }
 
+void setupFT(void)
+{
+	digitalWrite(CS_FT, LOW);
+	SPI.transfer(RESET);
+	pulseCS(CS_FT);
+	SPI.transfer(SETUP_FT);
+	SPI.transfer(0xFF);
+	pulseCS(CS_FT);
+	SPI.transfer(CONV_FT);
+	digitalWrite(CS_FT, HIGH);
+}
+
+void setupACC(void)
+{
+	digitalWrite(CS_ACC, LOW);
+	SPI.transfer(RESET);
+	pulseCS(CS_ACC);
+	SPI.transfer(SETUP_ACC);
+	pulseCS(CS_ACC);
+	SPI.transfer(CONV_ACC);
+	digitalWrite(CS_ACC, HIGH);
+}
+
 void setup(void)
 {
-	//define setup and conversion bits
 
-	setup_ft = SETUP_FT ; //setupReg(CLOCK_MODE10, REF_INT_NODELAY, BIPOLAR); //0x6b
-	conv_ft = CONV_FT; //convReg(11, SCAN_MODE00, 0);
+	// Start USB
+	Serial.begin(9600);
 
 	// Declare chip select pins, set to idle high
 	pinMode(CS_ACC, OUTPUT);
@@ -106,27 +198,20 @@ void setup(void)
 	// Start SPI, 8Mhz speed, Defaults to mode 0
 	SPI.begin();
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
-	SPI.setDataMode(SPI_MODE3);
+	SPI.setDataMode(SPI_MODE0);
 
-	// Setup for Accelerometer ADC, resets, writes setup byte, then starts first conversion
-	digitalWrite(CS_FT, LOW);
-	SPI.transfer(RESET);
-	pulseCS(CS_FT);
-	SPI.transfer(setup_ft);
-	// pulseCS(CS_FT);
-	SPI.transfer(0xFF);
-	pulseCS(CS_FT);
-	SPI.transfer(conv_ft);
-	digitalWrite(CS_FT, HIGH);
-
-	// Short delay to let everything settle
 	delay(100);
 
-	// Start USB
-	Serial.begin(9600);
+	// Setup for Accelerometer ADC, resets, writes setup byte, then starts first conversion
+	setupACC();
+	setupFT();
+
+	// Short delay to let everything settle
+
+	delay(10);
 
 	//Start timer interrupt
-	irq.begin(readADC_FT, SAMPLE_RATE);
+	irq.begin(readADC , SAMPLE_RATE);
 
 }
 

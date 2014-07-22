@@ -9,10 +9,11 @@ from HapticsSTB import *
 
 # Default values for command line inputs, checked right below here
 inputs = {	'graphing' : 0,
-			'line_length': 100,
+			'line_length': 150,
 			'bias_sample': 100,
-			'update_interval': 20,
+			'update_interval': 50,
 			'sample_time': 5,
+			'write_data': 0,
 }
 
 
@@ -27,8 +28,9 @@ try:
 					print '-sample_time: Sampling time in seconds'
 					print '-graphing: reduce sample rate and display line plots'
 					print '    1: F/T graph'
-					print '    2: Mini40 Channel sVoltages'
+					print '    2: Mini40 Channel Voltages'
 					print '    3: Accelerometer Voltages'
+					print '    4: Single Point Position'
 					print '(GRAPHING OPTIONS)'
 					print '-line_length: Length of graphing plot'
 					print '-update_interval: Number of samples between plot updates'
@@ -42,8 +44,12 @@ except NameError:
 
 # Open serial port, if default device not found list alternatives and ask for
 # input
+
+default_device = '/dev/tty.usbmodem409621'
+alt_device = ''
+
 try:
-	ser = serial.Serial('/dev/tty.usbmodem409621',6900, timeout=0.1)
+	ser = serial.Serial(default_device,6900, timeout=0.1)
 except OSError:
 	serial_devices = glob.glob('/dev/tty.usbmodem*')
 
@@ -57,10 +63,34 @@ except OSError:
 	use_device = input("Default device not found; Which do you want? :")
 
 	try:
-		ser = serial.Serial(serial_devices[use_device],6900, timeout=0.1)
+		alt_device = serial_devices[use_device]
+		ser = serial.Serial(alt_device,6900, timeout=0.1)
 	except OSError:
 		print serial_devices[dev].upper() + " NOT VALID, EXITING"
 		sys.exit()
+
+
+# Try to read from serial port, if you don't get anything close and retry up
+# to five times
+for ii in range(1,6):
+	testdat = ser.read(31)
+
+	if testdat == '':
+		if ii == 5:
+			sys.exit()
+
+		print 'Packet empty, retry #%d' %ii
+		ser.close()
+		if alt_device:
+			ser = serial.Serial(alt_device,6900, timeout=0.1)
+			ser.flush()
+		else:
+			ser = serial.Serial(default_device,6900, timeout=0.1)
+			ser.flush()
+
+	else:
+		break
+
 
 # Graphing Initialization code
 if inputs['graphing']:
@@ -86,6 +116,11 @@ if inputs['graphing']:
 		TYline, = axT.plot([0] * line_length, color = 'm')
 		TZline, = axT.plot([0] * line_length, color = 'y')
 
+		axF.legend([FXline, FYline, FZline], ['FX', 'FY', 'FZ'])
+		axT.legend([TXline, TYline, TZline], ['TX', 'TY', 'TZ'])
+
+
+
 		pl.draw()
 
 	# Mini40 Voltage Graphing
@@ -100,10 +135,14 @@ if inputs['graphing']:
 		C4line, = pl.plot([0] * line_length, color = 'purple')
 		C5line, = pl.plot([0] * line_length, color = 'gray')
 
+		pl.legend([C0line, C1line, C2line, C3line, C4line, C5line], 
+			['Channel 0', 'Channel 1','Channel 2','Channel 3','Channel 4','Channel 5'])
+
 		pl.draw()
 
 	#Accelerometer Voltage Graphing
 	elif inputs['graphing'] == 3:
+
 		f, (ax1, ax2, ax3) =pl.subplots(3,1, sharex=True)
 
 		ax1.axis([0,line_length,0,3.3])
@@ -126,6 +165,15 @@ if inputs['graphing']:
 		A3Zline, = ax3.plot([0] * line_length, color = 'b')
 
 		pl.draw()
+
+	# 2D Position Plotting
+	elif inputs['graphing'] == 4:
+
+		pl.axis([-.075, .075, -.075, .075])
+		touch_point, = pl.plot(0,0, marker="o", markersize=50)
+
+		pl.draw()
+
 	else:
 		print "INVALID GRAPHING MODE"
 
@@ -135,7 +183,7 @@ ser.flush()
 ## BIASING
 # read first 500 samples and average to get bias
 
-print "DON'T TOUCH BOARD"
+print "DON'T TOUCH BOARD..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
 for ii in range(0, inputs['bias_sample']):
@@ -187,7 +235,7 @@ for ii in range(0,500*inputs['sample_time']):
 	packet_old = packet
 
 	FT = Serial2FT(dat, bias)
-	ACC = Serial2ACC(dat)
+	ACC = Serial2Acc(dat)
 
 	if ii == 0:
 		FT_hist = FT
@@ -204,6 +252,7 @@ for ii in range(0,500*inputs['sample_time']):
 
 	# pdb.set_trace()
 
+	# Update Graph code
 	if inputs['graphing']:
 		if ii % inputs['update_interval'] == 0 and ii > line_length:
 
@@ -239,17 +288,32 @@ for ii in range(0,500*inputs['sample_time']):
 				A3Yline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],7].T)
 				A3Zline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],8].T)
 
+			if inputs['graphing'] == 4:
+
+				if abs(FT[2]) > .1:
+					x = -1*FT[4]/FT[2]
+					y = FT[3]/FT[2]
+				else:
+					x = y = 0
+
+				touch_point.set_ydata(y)
+				touch_point.set_xdata(x)
+
 			pl.draw()
 
-
+ser.flush()
 ser.close()
 
-# filename = 'TestData/STBTD_' + time.strftime('%Y-%m-%d_%H:%M') + '.csv'
-# try:
-# 	np.savetxt(filename, V_hist, delimiter=",")
-# except:
-# 	os.mkdir('TestData')
-# 	np.savetxt(filename, V_hist, delimiter=",")
+## RECORDING
+# Saves data in timestamped .csv in TestData folder, creates folder if needed
+
+if inputs['write_data'] == 1:
+	filename = 'TestData/STBTD_' + time.strftime('%Y-%m-%d_%H:%M') + '.csv'
+	try:
+		np.savetxt(filename, V_hist, delimiter=",")
+	except:
+		os.mkdir('TestData')
+		np.savetxt(filename, V_hist, delimiter=",")
 
 
 

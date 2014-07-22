@@ -33,6 +33,9 @@
 #define UNIPOLAR	0x2
 #define BIPOLAR		0x3
 
+#define START 0x01 
+#define STOP 0x02
+
 
 IntervalTimer irq;
 
@@ -47,70 +50,6 @@ byte setupReg(byte cksel, byte refsel, byte diffsel)
 {
 	byte command = 0x40 | (cksel << 4) | (refsel << 2) | (diffsel);
 	return command;
-}
-
-void readADC_FT(void)
-{
-	static byte j = 0;
-	static byte data[13];
-	byte i = 0;
-
-	j++;
-
-	Serial.flush();
-
-	// Read 6 bytes from ADC, conv. bit has already been sent
-	for (i = 0; i < 18; i++)
-	{	
-		digitalWrite(CS_FT, LOW);
-		data[i] = SPI.transfer(0x00);
-		digitalWrite(CS_FT, HIGH);
-		delayMicroseconds(2);
-	}
-
-	// Last byte of package is incremented, check for lost packets on master side
-	data[18] = j;
-
-	// Write data through USB
-	Serial.write(data, 19);
-
-	// Send conv start byte for next IRQ
-	digitalWrite(CS_FT, LOW);
-	SPI.transfer(CONV_FT);
-	digitalWrite(CS_FT, HIGH);
-
-}
-
-void readADC_ACC(void)
-{
-	static byte j = 0;
-	static byte data[19];
-	byte i = 0;
-
-	j++;
-
-	Serial.flush();
-
-	// Read 6 bytes from ADC, conv. bit has already been sent
-	for (i = 0; i < 18; i++)
-	{	
-		digitalWrite(CS_ACC, LOW);
-		data[i] = SPI.transfer(0x00);
-		digitalWrite(CS_ACC, HIGH);
-		delayMicroseconds(2);
-	}
-
-	// Last byte of package is incremented, check for lost packets on master side
-	data[18] = j;
-
-	// Write data through USB
-	Serial.write(data, 19);
-
-	// Send conv start byte for next IRQ
-	digitalWrite(CS_ACC, LOW);
-	SPI.transfer(CONV_ACC);
-	digitalWrite(CS_ACC, HIGH);
-
 }
 
 void readADC(void)
@@ -167,8 +106,6 @@ void setupFT(void)
 	pulseCS(CS_FT);
 	SPI.transfer(SETUP_FT);
 	SPI.transfer(0xFF);
-	pulseCS(CS_FT);
-	SPI.transfer(CONV_FT);
 	digitalWrite(CS_FT, HIGH);
 }
 
@@ -178,8 +115,6 @@ void setupACC(void)
 	SPI.transfer(RESET);
 	pulseCS(CS_ACC);
 	SPI.transfer(SETUP_ACC);
-	pulseCS(CS_ACC);
-	SPI.transfer(CONV_ACC);
 	digitalWrite(CS_ACC, HIGH);
 }
 
@@ -211,11 +146,36 @@ void setup(void)
 	delay(10);
 
 	//Start timer interrupt
-	irq.begin(readADC , SAMPLE_RATE);
+	// irq.begin(readADC , SAMPLE_RATE);
 
 }
 
 void loop(void)
 {
+	byte message;
+
+	if (Serial.available())
+	{
+		message = Serial.read();
+
+		if (message == START)
+		{
+			digitalWrite(CS_ACC, LOW);
+			SPI.transfer(CONV_ACC);
+			digitalWrite(CS_ACC, HIGH);
+
+			digitalWrite(CS_FT, LOW);
+			SPI.transfer(CONV_FT);
+			digitalWrite(CS_FT, HIGH);
+
+			delayMicroseconds(SAMPLE_RATE);
+			
+			irq.begin(readADC, SAMPLE_RATE);
+		}
+
+		if (message == STOP)
+			irq.end();
+
+	}
 
 }

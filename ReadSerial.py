@@ -22,8 +22,9 @@ inputs = {	'graphing' : 0,
 try:
 	if len(sys.argv) > 1:
 		for arg in range(1,len(sys.argv)):
-			if sys.argv[arg][0] == '-':
-				if sys.argv[arg] == '-help':
+			command = sys.argv[arg]
+			if command[0] == '-':
+				if command == '-help':
 					print '-bias_sample: Number of samples averaged to get Mini40 offset vector'
 					print '-sample_time: Sampling time in seconds'
 					print '-graphing: reduce sample rate and display line plots'
@@ -36,7 +37,11 @@ try:
 					print '-update_interval: Number of samples between plot updates'
 					sys.exit()
 				else:
-					inputs[sys.argv[arg][1:].lower()] = int(sys.argv[arg+1])
+					if command[1:] in inputs.keys():
+						inputs[command[1:].lower()] = int(sys.argv[arg+1])
+					else:
+						print "Invalid Command!"
+						sys.exit()
 except NameError:
 	print "Invalid Command!"
 	sys.exit()
@@ -72,6 +77,8 @@ except OSError:
 
 # Try to read from serial port, if you don't get anything close and retry up
 # to five times
+
+ser.write('\x01')
 for ii in range(1,6):
 	testdat = ser.read(31)
 
@@ -170,6 +177,7 @@ if inputs['graphing']:
 	elif inputs['graphing'] == 4:
 
 		pl.axis([-.075, .075, -.075, .075])
+		pl.grid()
 		touch_point, = pl.plot(0,0, marker="o", markersize=50)
 
 		pl.draw()
@@ -301,6 +309,7 @@ for ii in range(0,500*inputs['sample_time']):
 
 			pl.draw()
 
+ser.write('\x02')
 ser.flush()
 ser.close()
 

@@ -106,6 +106,8 @@ void setupFT(void)
 	pulseCS(CS_FT);
 	SPI.transfer(SETUP_FT);
 	SPI.transfer(0xFF);
+	pulseCS(CS_FT);
+	SPI.transfer(CONV_FT);
 	digitalWrite(CS_FT, HIGH);
 }
 
@@ -115,6 +117,8 @@ void setupACC(void)
 	SPI.transfer(RESET);
 	pulseCS(CS_ACC);
 	SPI.transfer(SETUP_ACC);
+	pulseCS(CS_ACC);
+	SPI.transfer(CONV_ACC);
 	digitalWrite(CS_ACC, HIGH);
 }
 
@@ -135,46 +139,53 @@ void setup(void)
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
 	SPI.setDataMode(SPI_MODE0);
 
-	delay(100);
-
-	// Setup for Accelerometer ADC, resets, writes setup byte, then starts first conversion
-	setupACC();
-	setupFT();
-
-	// Short delay to let everything settle
-
-	delay(10);
-
-	//Start timer interrupt
-	// irq.begin(readADC , SAMPLE_RATE);
-
 }
 
 void loop(void)
 {
-	byte message;
+	byte message[5];
+	byte sample_rate_buff[2];
+	int sample_rate;
+	byte packet_length;
 
 	if (Serial.available())
 	{
-		message = Serial.read();
+		noInterrupts();
+		packet_length = Serial.available();
 
-		if (message == START)
+		for (int i = 0; i < packet_length; i++)
 		{
-			digitalWrite(CS_ACC, LOW);
-			SPI.transfer(CONV_ACC);
-			digitalWrite(CS_ACC, HIGH);
-
-			digitalWrite(CS_FT, LOW);
-			SPI.transfer(CONV_FT);
-			digitalWrite(CS_FT, HIGH);
-
-			delayMicroseconds(SAMPLE_RATE);
-			
-			irq.begin(readADC, SAMPLE_RATE);
+			message[i] = Serial.read();
 		}
 
-		if (message == STOP)
+		Serial.flush();
+
+		if (message[0] == START)
+		{
+			if (packet_length > 1)
+			{
+				sample_rate = 1000000/((int)(message[1]<<8) + (int)message[2]);
+				// delay(1);
+			}
+
+			else
+			{
+				sample_rate = SAMPLE_RATE;
+			}
+			
+			// delay(1);
+			setupACC();
+			setupFT();
+			
+			delayMicroseconds(sample_rate);
+
+			irq.begin(readADC, sample_rate);
+		}
+
+		if (message[0] == STOP)
 			irq.end();
+
+		interrupts()
 
 	}
 

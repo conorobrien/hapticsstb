@@ -14,8 +14,24 @@ inputs = {	'graphing' : 0,
 			'update_interval': 50,
 			'sample_time': 5,
 			'write_data': 0,
+			'sample_rate': 500,
 }
 
+help_message = """ ******
+-bias_sample: Number of samples averaged to get Mini40 biasing vector
+-sample_time: Sampling time in seconds
+-sample_rate: data sampling rate in Hz (forced to 500Hz for plotting)
+-write_data: Write data to timestamped file
+-graphing: reduce sample rate and display line plots
+    1: F/T graph
+    2: Mini40 Channel Voltages
+    3: Accelerometer Voltages
+    4: Single Point Position
+(GRAPHING OPTIONS)
+-line_length: Length of graphing plot
+-update_interval: Number of samples between plot updates
+*****
+"""
 
 # Input handling, inputs beginning with '-' are considered commands, following
 # string is converted to an int and assigned to the dictionary
@@ -25,16 +41,7 @@ try:
 			command = sys.argv[arg]
 			if command[0] == '-':
 				if command == '-help':
-					print '-bias_sample: Number of samples averaged to get Mini40 offset vector'
-					print '-sample_time: Sampling time in seconds'
-					print '-graphing: reduce sample rate and display line plots'
-					print '    1: F/T graph'
-					print '    2: Mini40 Channel Voltages'
-					print '    3: Accelerometer Voltages'
-					print '    4: Single Point Position'
-					print '(GRAPHING OPTIONS)'
-					print '-line_length: Length of graphing plot'
-					print '-update_interval: Number of samples between plot updates'
+					print help_message
 					sys.exit()
 				else:
 					if command[1:] in inputs.keys():
@@ -42,7 +49,7 @@ try:
 					else:
 						print "Invalid Command!"
 						sys.exit()
-except NameError:
+except (NameError, ValueError, IndexError):
 	print "Invalid Command!"
 	sys.exit()
 
@@ -75,33 +82,11 @@ except OSError:
 		sys.exit()
 
 
-# Try to read from serial port, if you don't get anything close and retry up
-# to five times
-
-ser.write('\x01')
-for ii in range(1,6):
-	testdat = ser.read(31)
-
-	if testdat == '':
-		if ii == 5:
-			sys.exit()
-
-		print 'Packet empty, retry #%d' %ii
-		ser.close()
-		if alt_device:
-			ser = serial.Serial(alt_device,6900, timeout=0.1)
-			ser.flush()
-		else:
-			ser = serial.Serial(default_device,6900, timeout=0.1)
-			ser.flush()
-
-	else:
-		break
-
-
 # Graphing Initialization code
 if inputs['graphing']:
 
+	inputs['sample_rate'] = 500;
+	print 'Forcing sample rate to 500Hz for graphing'
 	line_length = inputs['line_length']
 	pl.ion()
 
@@ -185,13 +170,55 @@ if inputs['graphing']:
 	else:
 		print "INVALID GRAPHING MODE"
 
+
+
+# Try to read from serial port, if you don't get anything close and retry up
+# to five times
+
+def to16bit(x):
+	if x > int('0b1111111111111111',2):
+		raise ValueError
+
+	high = (x&int('0b1111111100000000',2))>>8
+	low = x&int('0b11111111',2)
+
+	return chr(high)+chr(low)
+
+ser.flush()
+ser.write('\x02')
+ser.write('\x01' + to16bit(inputs['sample_rate']))
+
+for ii in range(1,6):
+	testdat = ser.read(31)
+
+	if testdat == '':
+		if ii == 5:
+			sys.exit()
+
+		print 'Packet empty, retry #%d' %ii
+		ser.close()
+		
+		if alt_device:
+			ser = serial.Serial(alt_device,6900, timeout=0.1)
+		else:
+			ser = serial.Serial(default_device,6900, timeout=0.1)
+
+		ser.flush()
+		ser.write('\x02')
+		ser.write('\x01')
+		ser.write(to16bit(inputs['sample_rate']))
+
+
+	else:
+		break
+
 # Prep serial connection
 ser.flush()
 
 ## BIASING
 # read first 500 samples and average to get bias
 
-print "DON'T TOUCH BOARD..."
+print "DON'T TOUCH BOARD, BIASING..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
 for ii in range(0, inputs['bias_sample']):
@@ -222,9 +249,19 @@ print bias
 
 
 ## SAMPLING
-# Code takes samples for seconds defined in sample_time (500 HZ SAMPLE RATE NOW)
+# Code takes samples for seconds defined in sample_time
+# need to preallocate vectors
 
-for ii in range(0,500*inputs['sample_time']):
+print 'STARTING DATA COLLECTION'
+start = time.time()
+num_samples = inputs['sample_rate']*inputs['sample_time']
+
+FT_hist = np.zeros((num_samples, 6))
+if inputs['graphing'] == 2:
+	V_hist = np.zeros((num_samples,6))
+ACC_hist = np.zeros((num_samples, 9))
+
+for ii in range(0,num_samples):
 
 	dat = ser.read(31)
 	
@@ -242,59 +279,53 @@ for ii in range(0,500*inputs['sample_time']):
 
 	packet_old = packet
 
-	FT = Serial2FT(dat, bias)
-	ACC = Serial2Acc(dat)
+	# if ii == 0:
+	# 	FT_hist = FT
+	# 	ACC_hist = ACC
+	# 	if inputs['graphing'] == 2:
+	# 		V_hist = Serial2M40Volts(dat)
+	FT_hist[ii,:] = Serial2FT(dat, bias)
+	ACC_hist[ii,:] = Serial2Acc(dat)
 
-	if ii == 0:
-		FT_hist = FT
-		ACC_hist = ACC
-		if inputs['graphing'] == 2:
-			V_hist = Serial2M40Volts(dat)
-
-
-	else:
-		FT_hist = np.vstack((FT_hist,FT))
-		ACC_hist = np.vstack((ACC_hist, ACC))
-		if inputs['graphing'] == 2:
-			V_hist = np.vstack((V_hist, Serial2M40Volts(dat)))
-
-	# pdb.set_trace()
+	if inputs['graphing'] == 2:
+		V_hist[ii,:] = Serial2M40Volts(dat)
 
 	# Update Graph code
 	if inputs['graphing']:
 		if ii % inputs['update_interval'] == 0 and ii > line_length:
 
+			current_frame = ii + 1
 			if inputs['graphing'] == 1:
 
-				FXline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],0].T)
-				FYline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],1].T)
-				FZline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],2].T)
-				TXline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],3].T)
-				TYline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],4].T)
-				TZline.set_ydata(FT_hist[(FT_hist.shape[0] - line_length):FT_hist.shape[0],5].T)
+				FXline.set_ydata(FT_hist[(current_frame - line_length):current_frame,0].T)
+				FYline.set_ydata(FT_hist[(current_frame - line_length):current_frame,1].T)
+				FZline.set_ydata(FT_hist[(current_frame - line_length):current_frame,2].T)
+				TXline.set_ydata(FT_hist[(current_frame - line_length):current_frame,3].T)
+				TYline.set_ydata(FT_hist[(current_frame - line_length):current_frame,4].T)
+				TZline.set_ydata(FT_hist[(current_frame - line_length):current_frame,5].T)
 
 			if inputs['graphing'] == 2:
 
-				C0line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],0].T)
-				C1line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],1].T)
-				C2line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],2].T)
-				C3line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],3].T)
-				C4line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],4].T)
-				C5line.set_ydata(V_hist[(V_hist.shape[0] - line_length):V_hist.shape[0],5].T)
+				C0line.set_ydata(V_hist[(current_frame- line_length):current_frame,0].T)
+				C1line.set_ydata(V_hist[(current_frame- line_length):current_frame,1].T)
+				C2line.set_ydata(V_hist[(current_frame- line_length):current_frame,2].T)
+				C3line.set_ydata(V_hist[(current_frame- line_length):current_frame,3].T)
+				C4line.set_ydata(V_hist[(current_frame- line_length):current_frame,4].T)
+				C5line.set_ydata(V_hist[(current_frame- line_length):current_frame,5].T)
 			
 			if inputs['graphing'] == 3:
 
-				A1Xline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],0].T)
-				A1Yline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],1].T)
-				A1Zline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],2].T)
+				A1Xline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,0].T)
+				A1Yline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,1].T)
+				A1Zline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,2].T)
 
-				A2Xline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],3].T)
-				A2Yline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],4].T)
-				A2Zline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],5].T)
+				A2Xline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,3].T)
+				A2Yline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,4].T)
+				A2Zline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,5].T)
 
-				A3Xline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],6].T)
-				A3Yline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],7].T)
-				A3Zline.set_ydata(ACC_hist[(ACC_hist.shape[0] - line_length):ACC_hist.shape[0],8].T)
+				A3Xline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,6].T)
+				A3Yline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,7].T)
+				A3Zline.set_ydata(ACC_hist[(current_frame - line_length):current_frame,8].T)
 
 			if inputs['graphing'] == 4:
 
@@ -312,17 +343,25 @@ for ii in range(0,500*inputs['sample_time']):
 ser.write('\x02')
 ser.flush()
 ser.close()
-
+print 'Finished Sampling'
+print time.time()-start
 ## RECORDING
-# Saves data in timestamped .csv in TestData folder, creates folder if needed
+# Saves data in timestamped .csv in TestData folder, creates folders if needed
 
 if inputs['write_data'] == 1:
-	filename = 'TestData/STBTD_' + time.strftime('%Y-%m-%d_%H:%M') + '.csv'
-	try:
-		np.savetxt(filename, V_hist, delimiter=",")
-	except:
-		os.mkdir('TestData')
-		np.savetxt(filename, V_hist, delimiter=",")
+
+	data_dir = 'TestData'
+	test_filename = 'STB_' + time.strftime('%H:%M')
+	test_dir = time.strftime('%Y-%m-%d')
+
+	if '' == glob.glob(data_dir):
+		os.mkdir(data_dir)
+
+	if '' == glob.glob(data_dir + '/' + test_dir):
+		os.mkdir(data_dir + '/' + test_dir)
+
+	test_path = data_dir + '/' + test_dir + '/' + test_filename
+	np.savetxt(test_path, np.hstack((FT_hist, ACC_hist)), delimiter=",")
 
 
 

@@ -3,7 +3,7 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time
+import serial, sys, os, glob, pdb, time, argparse
 from HapticsSTB import *
 
 # Dict for command line inputs, contains default values

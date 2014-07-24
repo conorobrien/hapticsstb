@@ -7,7 +7,9 @@ import serial, sys, os, glob, pdb, time
 from HapticsSTB import *
 
 # Dict for command line inputs, contains default values
-inputs = {	'graphing' : 0,
+inputs = {	'subject': 1,
+			'task': 1,
+			'graphing': 0,
 			'line_length': 150,
 			'bias_sample': 100,
 			'update_interval': 50,
@@ -18,6 +20,8 @@ inputs = {	'graphing' : 0,
 
 # Message displayed for command line help
 help_message = """ ******
+-subject: Subject ID number
+-task: Task ID number
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
 -sample_rate: data sampling rate in Hz (forced to 500Hz for plotting)
@@ -216,22 +220,54 @@ print time.time()-start
 if inputs['write_data'] == 1:
 
 	data_dir = 'TestData'
-	test_filename = 'STB_' + time.strftime('%H:%M')
-	test_dir = time.strftime('%Y-%m-%d')
+	subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
+	test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
 
-	if '' == glob.glob(data_dir):
+
+	if [] == glob.glob(data_dir):
 		os.mkdir(data_dir)
 
-	if '' == glob.glob(data_dir + '/' + test_dir):
-		os.mkdir(data_dir + '/' + test_dir)
 
-	test_path = data_dir + '/' + test_dir + '/' + test_filename
-	np.savetxt(test_path, np.hstack((FT_hist, ACC_hist)), delimiter=",")
+	if [] == glob.glob(data_dir + '/' + subject_dir):
+		os.mkdir(data_dir + '/' + subject_dir)
 
-
-
+	test_path = data_dir + '/' + subject_dir + '/' + test_filename + '.csv'
+	np.savetxt(test_path, DAT_hist[:,0:15], delimiter=",")
 
 
 
 
-		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

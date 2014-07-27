@@ -16,12 +16,14 @@ inputs = {	'subject': 1,
 			'sample_time': 5,
 			'write_data': 0,
 			'sample_rate': 500,
+			'pedal': 0,
 }
 
 # Message displayed for command line help
 help_message = """ ******
 -subject: Subject ID number
 -task: Task ID number
+-pedal: use foot pedal for controlling sampling
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
 -sample_rate: data sampling rate in Hz (forced to 500Hz for plotting)
@@ -66,21 +68,29 @@ if inputs['graphing']:
 
 	plot_objects = GraphingSetup(inputs)
 
-# Open serial port, if default device not found list alternatives and ask for
+# Open serial port, if default STB not found list alternatives and ask for
 # input
 
+#This shouldnt be needed except for changing teensys
+
 if sys.platform == 'darwin':
-	default_device = '/dev/tty.usbmodem409621'
+	default_STB = '/dev/tty.usbmodem409621'
+	default_pedal = '/dev/tty.usbmodem409631'
 	device_folder = '/dev/tty.usbmodem*'
 
 elif sys.platform == 'linux2':
-	default_device = '/dev/ttyACM0'
+	default_STB = '/dev/ttyACM0'
 	device_folder = '/dev/ttyACM*'
+	print 'FOOT PEDAL NOT SUPPORTED YET'
+	inputs['pedal'] = 0
 
-alt_device = ''
+alt_STB = ''
+
+
+PedalSerial = serial.Serial(default_pedal, timeout = 0.0)
 
 try:
-	ser = serial.Serial(default_device, timeout=0.1)
+	STBserial = serial.Serial(default_STB, timeout=0.1)
 except:
 	serial_devices = glob.glob(device_folder)
 
@@ -94,48 +104,43 @@ except:
 	use_device = input("Default device not found; Which do you want? :")
 
 	try:
-		alt_device = serial_devices[use_device]
-		ser = serial.Serial(alt_device, timeout=0.1)
+		alt_STB = serial_devices[use_device]
+		STBserial = serial.Serial(alt_STB, timeout=0.1)
 	except OSError:
 		print serial_devices[dev].upper() + " NOT VALID, EXITING"
 		sys.exit()
-
-
 
 # Try to read from serial port, if you don't get anything close and retry up
 # to five times
 
 # Send a stop/start command in case of improper stop last time
-ser.flush()
-ser.write('\x02')
-ser.write('\x01' + to16bit(inputs['sample_rate']))
+
+STBserial.flush()
+STBserial.write('\x02')
+STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
 for ii in range(1,6):
-	testdat = ser.read(31)
+	testdat = STBserial.read(31)
 
 	if testdat == '':
 		if ii == 5:
 			sys.exit()
 
 		print 'Packet empty, retry #%d' %ii
-		ser.close()
+		STBserial.close()
 
-		if alt_device:
-			ser = serial.Serial(alt_device,6900, timeout=0.1)
+		if alt_STB:
+			ser = serial.Serial(alt_STB,6900, timeout=0.1)
 		else:
-			ser = serial.Serial(default_device,6900, timeout=0.1)
+			ser = serial.Serial(default_STB,6900, timeout=0.1)
 
-		ser.flush()
-		ser.write('\x02')
-		ser.write('\x01')
-		ser.write(to16bit(inputs['sample_rate']))
+		STBserial.flush()
+		STBserial.write('\x02')
+		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
 
 	else:
 		break
-
-# Prep serial connection
-ser.flush()
 
 ## BIASING
 # read first 500 samples and average to get bias
@@ -145,11 +150,11 @@ bias_hist = np.zeros((6,inputs['bias_sample']))
 
 for ii in range(0, inputs['bias_sample']):
 
-	dat = ser.read(31)
+	dat = STBserial.read(31)
 	
 	if dat == '':
 		print 'nothing recieved'
-		ser.close()
+		STBserial.close()
 		sys.exit()
 
 	packet = ord(dat[30])
@@ -168,78 +173,126 @@ bias = np.mean(bias_hist, axis=1).T
 print "SAFE TO TOUCH"
 print 'BIAS MATRIX'
 print bias
+STBserial.write('\x02')
 
 
 ## SAMPLING
 # Code takes samples for seconds defined in sample_time
 
-print 'STARTING DATA COLLECTION'
-start = time.time()
-num_samples = inputs['sample_rate']*inputs['sample_time']
+
+
+# set lengths for hist vectors, if pedal mode just preallocate for 10 min
+# session
+
+if inputs['pedal']:
+	num_samples = inputs['sample_rate']*600
+else:
+	num_samples = inputs['sample_rate']*inputs['sample_time']
 
 # If plotting voltage as well, DAT_hist has an extra six columns at the end
 # which contain the voltage channels
 
-if inputs['graphing'] == 2:
-	DAT_hist = np.zeros((num_samples,21))
-else:
-	DAT_hist = np.zeros((num_samples, 15))
+try:
+	while 1:
 
-for ii in range(0,num_samples):
+		if inputs['pedal']:		
+			print 'WAITING FOR PEDAL INPUT...'
+			while PedalSerial.read() != '\x01':
+				pass
 
-	dat = ser.read(31)
-	
-	if dat == '':
-		print 'nothing recieved!'
-		ser.close()
-		sys.exit()
+		print 'STARTING DATA COLLECTION...'
+		start = time.time()
 
-	# Missed packet detection, last byte of usb packet counts up
-	packet = ord(dat[30])
-	if ii == 0:
-		packet_old = packet
-	elif packet != (packet_old+1)%256:
-		print 'MISSED PACKET', packet, packet_old
-	packet_old = packet
+		if inputs['graphing'] == 2:
+			DAT_hist = np.zeros((num_samples,21))
+		else:
+			DAT_hist = np.zeros((num_samples, 15))
 
-	DAT_hist[ii, 0:15] = Serial2Data(dat, bias)
+		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
-	if inputs['graphing'] == 2:
-		DAT_hist[ii,15:] = Serial2M40Volts(dat)
+		for ii in range(0,num_samples):
 
-	# Update Graph
-	if inputs['graphing']:
-		if ii % inputs['update_interval'] == 0 and ii > inputs['line_length']:
-				current_frame = ii + 1
-				updated_data = DAT_hist[(current_frame - inputs['line_length']):current_frame,:]
-				GraphingUpdater(inputs, updated_data, plot_objects)
+			dat = STBserial.read(31)
 			
-# Send stop byte and get rid of any unread data
-ser.write('\x02')
-ser.flush()
-print 'Finished Sampling'
-print time.time()-start
+			if dat == '':
+				print 'NOTHING RECIEVED!'
+				STBserial.close()
+				sys.exit()
+
+			# Missed packet detection, last byte of usb packet counts up
+			packet = ord(dat[30])
+			if ii == 0:
+				packet_old = packet
+			elif packet != (packet_old+1)%256:
+				print 'MISSED PACKET', packet, packet_old
+			packet_old = packet
+
+			DAT_hist[ii, 0:15] = Serial2Data(dat, bias)
+
+			if inputs['graphing'] == 2:
+				DAT_hist[ii,15:] = Serial2M40Volts(dat)
+
+			# Update Graph
+			if inputs['graphing']:
+				if ii % inputs['update_interval'] == 0 and ii > inputs['line_length']:
+						current_frame = ii + 1
+						updated_data = DAT_hist[(current_frame - inputs['line_length']):current_frame,:]
+						GraphingUpdater(inputs, updated_data, plot_objects)
+
+			if inputs['pedal']:
+				if PedalSerial.read() == '\x00':
+					print 'PEDAL STOP'
+					break
+				
+		# Send stop byte and get rid of any unread data
+		STBserial.write('\x02')
+		STBserial.flush()
+		print 'FINISHED SAMPLING'
+		print time.time()-start
+
+		if inputs['write_data'] == 1:
+
+
+			data_dir = 'TestData'
+			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
+			task_dir = 'Task' + str(inputs['task'])
+			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
+
+			if [] == glob.glob(data_dir):
+				print "MAKING " + data_dir
+				os.mkdir(data_dir)
+
+			if [] == glob.glob(data_dir + '/' + subject_dir):
+				print "MAKING " + subject_dir
+				os.mkdir(data_dir + '/' + subject_dir)
+
+			print 'WRITING DATA TO %s...' %test_filename
+
+			test_path = data_dir + '/' + subject_dir + '/' + test_filename + '.csv'
+			np.savetxt(test_path, DAT_hist[:(ii+1),0:15], delimiter=",")
+
+			print 'FINISHED WRITING'
+
+
+		print '*'*80
+
+		if not inputs['pedal']:
+			break
+
+except KeyboardInterrupt:
+	print '***** ENDING TESTING *****'
+	STBserial.close()
+	PedalSerial.close()
+
+	# continue_command = raw_input('What now?: ')
+
+	# if continue_command == 'q':
+	# 	break
 
 ## RECORDING 
 # Saves data in timestamped .csv in TestData\CurrentDate folder,
 # creates the folders if needed
 
-if inputs['write_data'] == 1:
-
-	data_dir = 'TestData'
-	subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
-	test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
-
-
-	if [] == glob.glob(data_dir):
-		os.mkdir(data_dir)
-
-
-	if [] == glob.glob(data_dir + '/' + subject_dir):
-		os.mkdir(data_dir + '/' + subject_dir)
-
-	test_path = data_dir + '/' + subject_dir + '/' + test_filename + '.csv'
-	np.savetxt(test_path, DAT_hist[:,0:15], delimiter=",")
 
 
 

@@ -61,7 +61,7 @@ except (NameError, ValueError, IndexError):
 # Graphing Initialization
 if inputs['graphing']:
 
-	inputs['sample_rate'] = 750;
+	inputs['sample_rate'] = 500;
 	print 'Forcing sample rate to 500Hz for graphing'
 
 	plot_objects = GraphingSetup(inputs)
@@ -69,13 +69,20 @@ if inputs['graphing']:
 # Open serial port, if default device not found list alternatives and ask for
 # input
 
-default_device = '/dev/tty.usbmodem409621'
+if sys.platform == 'darwin':
+	default_device = '/dev/tty.usbmodem409621'
+	device_folder = '/dev/tty.usbmodem*'
+
+elif sys.platform == 'linux2':
+	default_device = '/dev/ttyACM0'
+	device_folder = '/dev/ttyACM*'
+
 alt_device = ''
 
 try:
-	ser = serial.Serial(default_device,6900, timeout=0.1)
-except OSError:
-	serial_devices = glob.glob('/dev/tty.usbmodem*')
+	ser = serial.Serial(default_device, timeout=0.1)
+except:
+	serial_devices = glob.glob(device_folder)
 
 	if serial_devices == []:
 		print "NO SERIAL DEVICE FOUND, EXITING"
@@ -88,7 +95,7 @@ except OSError:
 
 	try:
 		alt_device = serial_devices[use_device]
-		ser = serial.Serial(alt_device,6900, timeout=0.1)
+		ser = serial.Serial(alt_device, timeout=0.1)
 	except OSError:
 		print serial_devices[dev].upper() + " NOT VALID, EXITING"
 		sys.exit()

@@ -186,8 +186,14 @@ void loop(void)
 			irq.end();
 
 		if (message[0] == PING)
-			Serial.write(0x01);
-			
+			{
+				irq.end();
+				Serial.flush();
+				Serial.write(0x01);
+			}
+		
+		if (!Serial.dtr())
+			irq.end();	
 		interrupts()
 
 	}

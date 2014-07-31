@@ -17,8 +17,6 @@ void setup()
 	pinMode(LED_PIN, OUTPUT);
 	pinMode(PEDAL_PIN, INPUT);
 	digitalWrite(LED_PIN, pedal_state);
-	// attachInterrupt(14, isrService, FALLING);
-	// interrupts();
 
 }
 
@@ -59,35 +57,4 @@ void loop()
 	}
 
 	Serial.write(pedal_state);
-}
-
-void isrService()
-{
-	tap_interval = millis() - last_tap;
-	last_tap = millis();
-
-	if (tap_interval > DOUBLE_TAP_MAX)
-	{
-		pedal_state = 1;
-		third_tap = false;
-	}
-	else
-	{
-		if ((tap_interval >= DOUBLE_TAP_MIN) && (tap_interval <= DOUBLE_TAP_MAX))
-			if (third_tap)
-			{
-				pedal_state = 2;
-				third_tap = false;
-			}
-			else
-			{
-				pedal_state = 0;
-				third_tap = true;
-			}
-	}
-
-	noInterrupts();
-	Serial.write(pedal_state);
-	interrupts();
-
 }

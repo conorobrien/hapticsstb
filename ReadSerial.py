@@ -82,9 +82,10 @@ elif sys.platform == 'linux2':
 devices = glob.glob(device_folder)
 
 for dev in devices:
-	test_device = serial.Serial(dev, timeout=0.1)
+	test_device = serial.Serial(dev, timeout=0.05)
 	test_device.write('\x03')
-	devID = test_device.read(1)
+	devID = test_device.read(200)[-1]
+	pdb.set_trace()
 
 	if devID == '\x01':
 		STBserial = test_device
@@ -92,32 +93,8 @@ for dev in devices:
 	elif devID == '\x02':
 		PedalSerial = test_device
 		PedalSerial.timeout = 0
-
-# try:
-# 	STBserial = serial.Serial(default_STB, timeout=0.1)
-# except:
-# 	serial_devices = glob.glob(device_folder)
-
-# 	if serial_devices == []:
-# 		print "NO SERIAL DEVICE FOUND, EXITING"
-# 		sys.exit()
-
-# 	for dev in range(0,len(serial_devices)):
-# 		print "%d)" %dev + serial_devices[dev]
-
-# 	use_device = input("Default device not found; Which do you want? :")
-
-# 	try:
-# 		alt_STB = serial_devices[use_device]
-# 		STBserial = serial.Serial(alt_STB, timeout=0.1)
-# 	except OSError:
-# 		print serial_devices[dev].upper() + " NOT VALID, EXITING"
-# 		sys.exit()
-
-# Try to read from serial port, if you don't get anything close and retry up
-# to five times
-
-# Send a stop/start command in case of improper stop last time
+	else:
+		print 'unknown device'
 
 STBserial.flush()
 STBserial.write('\x02')
@@ -179,8 +156,6 @@ STBserial.write('\x02')
 
 ## SAMPLING
 # Code takes samples for seconds defined in sample_time
-
-
 
 # set lengths for hist vectors, if pedal mode just preallocate for 10 min
 # session

@@ -84,9 +84,9 @@ def GraphingSetup(inputs):
 
 		f, (axF, axT) =pl.subplots(2,1, sharex=True)
 
-		axF.axis([0,line_length,-20,20])
+		axF.axis([0,line_length,-5,5])
 		axF.grid()
-		axT.axis([0,line_length,-2,2])
+		axT.axis([0,line_length,-.5,.5])
 		axT.grid()
 
 

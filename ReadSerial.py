@@ -88,6 +88,7 @@ alt_STB = ''
 
 
 PedalSerial = serial.Serial(default_pedal, timeout = 0.0)
+PedalSerial.flush()
 
 try:
 	STBserial = serial.Serial(default_STB, timeout=0.1)
@@ -197,8 +198,14 @@ try:
 
 		if inputs['pedal']:		
 			print 'WAITING FOR PEDAL INPUT...'
-			while PedalSerial.read() != '\x01':
-				pass
+			pedal_input = ''
+			while pedal_input == '':
+				pedal_input = PedalSerial.read()
+
+			if pedal_input == '\x03':
+				print 'QUITTING...'
+				sys.exit()
+
 
 		print 'STARTING DATA COLLECTION...'
 		start = time.time()
@@ -240,9 +247,15 @@ try:
 						GraphingUpdater(inputs, updated_data, plot_objects)
 
 			if inputs['pedal']:
-				if PedalSerial.read() == '\x00':
+				pedal_input = PedalSerial.read()
+
+				if pedal_input == '\x03':
+					print 'QUITTING...'
+					sys.exit()
+				elif pedal_input == '\x02':
 					print 'PEDAL STOP'
 					break
+
 				
 		# Send stop byte and get rid of any unread data
 		STBserial.write('\x02')
@@ -283,15 +296,6 @@ except KeyboardInterrupt:
 	print '***** ENDING TESTING *****'
 	STBserial.close()
 	PedalSerial.close()
-
-	# continue_command = raw_input('What now?: ')
-
-	# if continue_command == 'q':
-	# 	break
-
-## RECORDING 
-# Saves data in timestamped .csv in TestData\CurrentDate folder,
-# creates the folders if needed
 
 
 

@@ -74,42 +74,45 @@ if inputs['graphing']:
 #This shouldnt be needed except for changing teensys
 
 if sys.platform == 'darwin':
-	default_STB = '/dev/tty.usbmodem409621'
-	default_pedal = '/dev/tty.usbmodem409631'
 	device_folder = '/dev/tty.usbmodem*'
 
 elif sys.platform == 'linux2':
-	default_STB = '/dev/ttyACM0'
 	device_folder = '/dev/ttyACM*'
-	print 'FOOT PEDAL NOT SUPPORTED YET'
-	inputs['pedal'] = 0
 
-alt_STB = ''
+devices = glob.glob(device_folder)
 
+for dev in devices:
+	test_device = serial.Serial(dev, timeout=0.1)
+	test_device.write('\x03')
+	devID = test_device.read(1)
 
-PedalSerial = serial.Serial(default_pedal, timeout = 0.0)
-PedalSerial.flush()
+	if devID == '\x01':
+		STBserial = test_device
+		STBserial_port = dev
+	elif devID == '\x02':
+		PedalSerial = test_device
+		PedalSerial.timeout = 0
 
-try:
-	STBserial = serial.Serial(default_STB, timeout=0.1)
-except:
-	serial_devices = glob.glob(device_folder)
+# try:
+# 	STBserial = serial.Serial(default_STB, timeout=0.1)
+# except:
+# 	serial_devices = glob.glob(device_folder)
 
-	if serial_devices == []:
-		print "NO SERIAL DEVICE FOUND, EXITING"
-		sys.exit()
+# 	if serial_devices == []:
+# 		print "NO SERIAL DEVICE FOUND, EXITING"
+# 		sys.exit()
 
-	for dev in range(0,len(serial_devices)):
-		print "%d)" %dev + serial_devices[dev]
+# 	for dev in range(0,len(serial_devices)):
+# 		print "%d)" %dev + serial_devices[dev]
 
-	use_device = input("Default device not found; Which do you want? :")
+# 	use_device = input("Default device not found; Which do you want? :")
 
-	try:
-		alt_STB = serial_devices[use_device]
-		STBserial = serial.Serial(alt_STB, timeout=0.1)
-	except OSError:
-		print serial_devices[dev].upper() + " NOT VALID, EXITING"
-		sys.exit()
+# 	try:
+# 		alt_STB = serial_devices[use_device]
+# 		STBserial = serial.Serial(alt_STB, timeout=0.1)
+# 	except OSError:
+# 		print serial_devices[dev].upper() + " NOT VALID, EXITING"
+# 		sys.exit()
 
 # Try to read from serial port, if you don't get anything close and retry up
 # to five times
@@ -130,10 +133,7 @@ for ii in range(1,6):
 		print 'Packet empty, retry #%d' %ii
 		STBserial.close()
 
-		if alt_STB:
-			ser = serial.Serial(alt_STB,6900, timeout=0.1)
-		else:
-			ser = serial.Serial(default_STB,6900, timeout=0.1)
+		ser = serial.Serial(STBserial_port,6900, timeout=0.1)
 
 		STBserial.flush()
 		STBserial.write('\x02')

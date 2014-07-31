@@ -35,7 +35,7 @@
 
 #define START 0x01 
 #define STOP 0x02
-
+#define PING 0x03
 
 IntervalTimer irq;
 
@@ -185,6 +185,9 @@ void loop(void)
 		if (message[0] == STOP)
 			irq.end();
 
+		if (message[0] == PING)
+			Serial.write(0x01);
+			
 		interrupts()
 
 	}

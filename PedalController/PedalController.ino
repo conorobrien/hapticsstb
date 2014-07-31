@@ -25,9 +25,22 @@ void setup()
 
 void loop()
 {
+	if (Serial.available())
+	{
+		if (Serial.read() == 0x03)
+			Serial.write(0x02);
+	}
+
 	digitalWrite(LED_PIN, !(pedal_state-1));
 
-	while (!digitalRead(PEDAL_PIN));
+	while (!digitalRead(PEDAL_PIN))
+	{
+		if (Serial.available())
+		{
+			if (Serial.read() == 0x03)
+				Serial.write(0x02);
+		}
+	}
 	pedal_state = 1;
 	while (digitalRead(PEDAL_PIN));
 

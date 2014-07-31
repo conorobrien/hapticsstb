@@ -5,6 +5,28 @@ import pylab as pl
 import numpy as np
 import serial, sys, os, glob, pdb, time, argparse
 from HapticsSTB import *
+import cv2
+import threading
+
+cap = cv2.VideoCapture(-1)
+# Define the codec and create VideoWriter object
+fourcc = cv2.cv.CV_FOURCC(*'XVID')
+
+class OpenCVThread(threading.Thread):
+	def __init__(self, cap, out):
+		threading.Thread.__init__(self)
+		self.stop = threading.Event()
+		self.out = out
+		self.cap = cap
+		self.i = 0
+	def run(self):
+		while not self.stop.is_set():
+			ret, frame = self.cap.read()
+			if ret==True:
+				frame = cv2.flip(frame,0)
+		    	self.out.write(frame)
+
+
 
 # Dict for command line inputs, contains default values
 inputs = {	'subject': 1,
@@ -129,6 +151,7 @@ for ii in range(1,6):
 print "DON'T TOUCH BOARD, BIASING..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
+
 for ii in range(0, inputs['bias_sample']):
 
 	dat = STBserial.read(31)
@@ -171,8 +194,12 @@ else:
 # If plotting voltage as well, DAT_hist has an extra six columns at the end
 # which contain the voltage channels
 
+frame_start = time.time()
+
 try:
 	while 1:
+
+
 
 		if inputs['pedal']:		
 			print 'WAITING FOR PEDAL INPUT...'
@@ -184,6 +211,10 @@ try:
 				print 'QUITTING...'
 				sys.exit()
 
+		test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
+		out = cv2.VideoWriter(test_filename+'.avi',fourcc, 20.0, (640,480))
+		videoThread = OpenCVThread(cap, out)
+		videoThread.start()
 
 		print 'STARTING DATA COLLECTION...'
 		start = time.time()
@@ -194,6 +225,8 @@ try:
 			DAT_hist = np.zeros((num_samples, 15))
 
 		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
+
+		
 
 		for ii in range(0,num_samples):
 
@@ -241,6 +274,8 @@ try:
 		print 'FINISHED SAMPLING'
 		print time.time()-start
 
+		videoThread.stop.set()
+
 		if inputs['write_data'] == 1:
 
 
@@ -274,6 +309,8 @@ except KeyboardInterrupt:
 	print '***** ENDING TESTING *****'
 	STBserial.close()
 	PedalSerial.close()
+	videoThread.stop.set()
+
 
 
 

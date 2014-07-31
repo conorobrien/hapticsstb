@@ -15,7 +15,7 @@ inputs = {	'subject': 1,
 			'update_interval': 50,
 			'sample_time': 5,
 			'write_data': 0,
-			'sample_rate': 500,
+			'sample_rate': 3000,
 			'pedal': 0,
 }
 
@@ -83,10 +83,13 @@ devices = glob.glob(device_folder)
 
 for dev in devices:
 	test_device = serial.Serial(dev, timeout=0.05)
+	test_device.write('\x02')
+	time.sleep(0.05)
+	test_device.flushInput()
 	test_device.write('\x03')
 	devID = test_device.read(200)[-1]
-	pdb.set_trace()
 
+	# pdb.set_trace()
 	if devID == '\x01':
 		STBserial = test_device
 		STBserial_port = dev

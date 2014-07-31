@@ -106,7 +106,7 @@ def GraphingSetup(inputs):
 
 	# Mini40 Voltage Graphing
 	elif inputs['graphing'] == 2:
-		pl.axis([0,line_length,-5,5])
+		pl.axis([0,line_length,-2,2])
 		pl.grid()
 
 		C0line, = pl.plot([0] * line_length, color = 'brown')

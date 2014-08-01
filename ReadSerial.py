@@ -112,13 +112,13 @@ if len(devices) < 2:
 STBserial = PedalSerial = 0
 
 for dev in devices:
-
 	# Step through devices, pinging each one for a device ID
-	test_device = serial.Serial(dev, timeout=0)
+	test_device = serial.Serial(dev, timeout=0.1)
 	test_device.write('\x02')
 	time.sleep(0.05)
 	test_device.flushInput()
 	test_device.write('\x03')
+ 	
 	devID = test_device.read(200)[-1]	#Read out everything in the buffer, and look at the last byte for the ID
 
 	if devID == '\x01':
@@ -131,7 +131,7 @@ for dev in devices:
 		print 'UNKNOWN DEVICE, EXITING...'
 		sys.exit()
 
-if !STBserial || (inputs['pedal'] && !PedalSerial):
+if not STBserial or (inputs['pedal'] and not PedalSerial):
 	print 'NOT ALL DEVICES FOUND, EXITING...'
 	sys.exit()
 
@@ -195,17 +195,19 @@ try:
 			while pedal_input != '\x01':
 				pedal_input = PedalSerial.read()
 
-			if pedal_input == '\x03':
-				print 'QUITTING...'
-				sys.exit()
+				if pedal_input == '\x03':
+					print 'QUITTING...'
+					sys.exit()
+
+			
 
 		# File operations, checks to make sure everything exists and timestamps
-		if inputs['write_data'] || inputs['video']:
-
-			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
-			test_path = data_dir + '/' + subject_dir + '/' + test_filename
+		if inputs['write_data'] or inputs['video_capture']:
 			data_dir = 'TestData'
 			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
+			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
+			test_path = data_dir + '/' + subject_dir + '/' + test_filename
+
 
 			if [] == glob.glob(data_dir):
 				print "MAKING " + data_dir
@@ -216,8 +218,9 @@ try:
 				os.mkdir(data_dir + '/' + subject_dir)
 
 		# Video prep, creates video folder
-		if inputs['video']:
-			out = cv2.VideoWriter(test_filename+'.avi',fourcc, 20.0, (640,480))
+		if inputs['video_capture']:
+			# pdb.set_trace()
+			out = cv2.VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
 			videoThread = OpenCVThread(cap, out)
 			videoThread.start()
 
@@ -242,6 +245,8 @@ try:
 				STBserial.close()
 				if inputs['pedal']:
 					PedalSerial.close()
+				if inputs['video_capture']:
+					videoThread.stop.set()
 				sys.exit()
 
 			# Missed packet detection, last byte of usb packet counts up
@@ -269,6 +274,13 @@ try:
 
 				if pedal_input == '\x03':
 					print 'QUITTING...'
+					STBserial.close()
+					if inputs['pedal']:
+						PedalSerial.close()
+					if inputs['video_capture']:
+						videoThread.stop.set()
+
+
 					sys.exit()
 				elif pedal_input == '\x02':
 					print 'PEDAL STOP'
@@ -280,7 +292,8 @@ try:
 		print 'FINISHED SAMPLING'
 		print time.time()-start
 
-		videoThread.stop.set()
+		if inputs['video_capture']:
+			videoThread.stop.set()
 
 		if inputs['write_data'] == 1:
 
@@ -299,8 +312,11 @@ try:
 except KeyboardInterrupt:
 	print '***** ENDING TESTING *****'
 	STBserial.close()
-	PedalSerial.close()
-	videoThread.stop.set()
+	if inputs['pedal']:
+		PedalSerial.close()
+	if inputs['video_capture']:
+		videoThread.stop.set()
+
 
 
 

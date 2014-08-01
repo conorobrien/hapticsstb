@@ -1,5 +1,5 @@
 
-#define DOUBLE_TAP_MIN 50
+#define DOUBLE_TAP_MIN 100
 #define DOUBLE_TAP_MAX 500
 
 #define PEDAL_PIN 14

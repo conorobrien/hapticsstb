@@ -6,14 +6,11 @@ import numpy as np
 import serial, sys, os, glob, pdb, time, cv2, threading
 from HapticsSTB import *
 
-
-
-
 # Dict for command line inputs, contains default values
 inputs = {	'subject': 1,
 			'task': 1,
 			'graphing': 0,
-			'line_length': 150,
+			'line_length': 250,
 			'bias_sample': 100,
 			'update_interval': 50,
 			'sample_time': 5,
@@ -28,10 +25,11 @@ help_message = """ ******
 -subject: Subject ID number
 -task: Task ID number
 -pedal: use foot pedal for controlling sampling
+-video_capture: Record video (right now from webcam)
+-write_data: Write data to timestamped file
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
 -sample_rate: data sampling rate in Hz (forced to 500Hz for plotting)
--write_data: Write data to timestamped file
 -graphing: reduce sample rate and display line plots for debugging
     1: F/T graph
     2: Mini40 Channel Voltages
@@ -123,7 +121,7 @@ for dev in devices:
 
 	if devID == '\x01':
 		STBserial = test_device
-		STBserial.timeout = 0.01
+		STBserial.timeout = 0.05
 	elif devID == '\x02':
 		PedalSerial = test_device
 		PedalSerial.timeout = 0
@@ -199,15 +197,12 @@ try:
 					print 'QUITTING...'
 					sys.exit()
 
-			
-
 		# File operations, checks to make sure everything exists and timestamps
 		if inputs['write_data'] or inputs['video_capture']:
 			data_dir = 'TestData'
 			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
 			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
 			test_path = data_dir + '/' + subject_dir + '/' + test_filename
-
 
 			if [] == glob.glob(data_dir):
 				print "MAKING " + data_dir

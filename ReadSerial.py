@@ -3,28 +3,9 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time, argparse
+import serial, sys, os, glob, pdb, time, cv2, threading
 from HapticsSTB import *
-import cv2
-import threading
 
-cap = cv2.VideoCapture(-1)
-# Define the codec and create VideoWriter object
-fourcc = cv2.cv.CV_FOURCC(*'XVID')
-
-class OpenCVThread(threading.Thread):
-	def __init__(self, cap, out):
-		threading.Thread.__init__(self)
-		self.stop = threading.Event()
-		self.out = out
-		self.cap = cap
-		self.i = 0
-	def run(self):
-		while not self.stop.is_set():
-			ret, frame = self.cap.read()
-			if ret==True:
-				frame = cv2.flip(frame,0)
-		    	self.out.write(frame)
 
 
 
@@ -39,6 +20,7 @@ inputs = {	'subject': 1,
 			'write_data': 0,
 			'sample_rate': 3000,
 			'pedal': 0,
+			'video_capture': 0,
 }
 
 # Message displayed for command line help
@@ -61,7 +43,7 @@ help_message = """ ******
 *****
 """
 
-# Input handling, inputs beginning with '-' are considered commands, following
+## Input handling, inputs beginning with '-' are considered commands, following
 # string is converted to an int and assigned to the inputs dict
 try:
 	if len(sys.argv) > 1:
@@ -82,6 +64,28 @@ except (NameError, ValueError, IndexError):
 	sys.exit()
 
 
+## Video Capture Setup
+if inputs['video_capture']:
+	# OpenCV initiliazation, create videoCapture object and codec
+	cap = cv2.VideoCapture(-1)
+	fourcc = cv2.cv.CV_FOURCC(*'XVID')
+
+	# Thread function for video capture
+	class OpenCVThread(threading.Thread):
+		def __init__(self, cap, out):
+			threading.Thread.__init__(self)
+			self.stop = threading.Event()
+			self.out = out
+			self.cap = cap
+			self.i = 0
+		def run(self):
+			while not self.stop.is_set():
+				ret, frame = self.cap.read()
+				if ret==True:
+					frame = cv2.flip(frame,0)
+			    	self.out.write(frame)
+
+
 # Graphing Initialization
 if inputs['graphing']:
 
@@ -90,10 +94,8 @@ if inputs['graphing']:
 
 	plot_objects = GraphingSetup(inputs)
 
-# Open serial port, if default STB not found list alternatives and ask for
-# input
-
-#This shouldnt be needed except for changing teensys
+# Auto Detection for USB, not needed on mac, but linux serial devices only
+# show up as ttyACMn, not with a unique ID
 
 if sys.platform == 'darwin':
 	device_folder = '/dev/tty.usbmodem*'
@@ -103,47 +105,35 @@ elif sys.platform == 'linux2':
 
 devices = glob.glob(device_folder)
 
+if len(devices) < 2:
+	print 'NOT ENOUGH DEVICES CONNECTED, EXITING...'
+	sys.exit()
+
+STBserial = PedalSerial = 0
+
 for dev in devices:
-	test_device = serial.Serial(dev, timeout=0.05)
+
+	# Step through devices, pinging each one for a device ID
+	test_device = serial.Serial(dev, timeout=0)
 	test_device.write('\x02')
 	time.sleep(0.05)
 	test_device.flushInput()
 	test_device.write('\x03')
-	devID = test_device.read(200)[-1]
+	devID = test_device.read(200)[-1]	#Read out everything in the buffer, and look at the last byte for the ID
 
-	# pdb.set_trace()
 	if devID == '\x01':
 		STBserial = test_device
-		STBserial_port = dev
+		STBserial.timeout = 0.01
 	elif devID == '\x02':
 		PedalSerial = test_device
 		PedalSerial.timeout = 0
 	else:
-		print 'unknown device'
+		print 'UNKNOWN DEVICE, EXITING...'
+		sys.exit()
 
-STBserial.flush()
-STBserial.write('\x02')
-STBserial.write('\x01' + to16bit(inputs['sample_rate']))
-
-for ii in range(1,6):
-	testdat = STBserial.read(31)
-
-	if testdat == '':
-		if ii == 5:
-			sys.exit()
-
-		print 'Packet empty, retry #%d' %ii
-		STBserial.close()
-
-		ser = serial.Serial(STBserial_port,6900, timeout=0.1)
-
-		STBserial.flush()
-		STBserial.write('\x02')
-		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
-
-
-	else:
-		break
+if !STBserial || (inputs['pedal'] && !PedalSerial):
+	print 'NOT ALL DEVICES FOUND, EXITING...'
+	sys.exit()
 
 ## BIASING
 # read first 500 samples and average to get bias
@@ -151,14 +141,17 @@ for ii in range(1,6):
 print "DON'T TOUCH BOARD, BIASING..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
+STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
 for ii in range(0, inputs['bias_sample']):
 
 	dat = STBserial.read(31)
 	
 	if dat == '':
-		print 'nothing recieved'
+		print 'NOTHING RECIEVED, EXITING...'
 		STBserial.close()
+		if inputs['pedal']:
+			PedalSerial.close()
 		sys.exit()
 
 	packet = ord(dat[30])
@@ -169,16 +162,13 @@ for ii in range(0, inputs['bias_sample']):
 		print 'MISSED PACKET', packet, packet_old
 
 	packet_old = packet
-
 	bias_hist[:,ii] = Serial2M40Volts(dat)
 
 bias = np.mean(bias_hist, axis=1).T
-
 print "SAFE TO TOUCH"
 print 'BIAS MATRIX'
 print bias
 STBserial.write('\x02')
-
 
 ## SAMPLING
 # Code takes samples for seconds defined in sample_time
@@ -191,34 +181,51 @@ if inputs['pedal']:
 else:
 	num_samples = inputs['sample_rate']*inputs['sample_time']
 
-# If plotting voltage as well, DAT_hist has an extra six columns at the end
-# which contain the voltage channels
+
 
 frame_start = time.time()
 
 try:
 	while 1:
 
-
-
+		# Pedal input blocking, single or double tap starts trial, triple quits
 		if inputs['pedal']:		
 			print 'WAITING FOR PEDAL INPUT...'
 			pedal_input = ''
-			while pedal_input == '':
+			while pedal_input != '\x01':
 				pedal_input = PedalSerial.read()
 
 			if pedal_input == '\x03':
 				print 'QUITTING...'
 				sys.exit()
 
-		test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
-		out = cv2.VideoWriter(test_filename+'.avi',fourcc, 20.0, (640,480))
-		videoThread = OpenCVThread(cap, out)
-		videoThread.start()
+		# File operations, checks to make sure everything exists and timestamps
+		if inputs['write_data'] || inputs['video']:
+
+			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
+			test_path = data_dir + '/' + subject_dir + '/' + test_filename
+			data_dir = 'TestData'
+			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
+
+			if [] == glob.glob(data_dir):
+				print "MAKING " + data_dir
+				os.mkdir(data_dir)
+
+			if [] == glob.glob(data_dir + '/' + subject_dir):
+				print "MAKING " + subject_dir
+				os.mkdir(data_dir + '/' + subject_dir)
+
+		# Video prep, creates video folder
+		if inputs['video']:
+			out = cv2.VideoWriter(test_filename+'.avi',fourcc, 20.0, (640,480))
+			videoThread = OpenCVThread(cap, out)
+			videoThread.start()
 
 		print 'STARTING DATA COLLECTION...'
 		start = time.time()
 
+		# If plotting voltage as well, DAT_hist has an extra six columns at the end
+		# which contain the voltage channels
 		if inputs['graphing'] == 2:
 			DAT_hist = np.zeros((num_samples,21))
 		else:
@@ -226,15 +233,15 @@ try:
 
 		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
-		
-
 		for ii in range(0,num_samples):
 
 			dat = STBserial.read(31)
 			
 			if dat == '':
-				print 'NOTHING RECIEVED!'
+				print 'NOTHING RECIEVED, EXITING...'
 				STBserial.close()
+				if inputs['pedal']:
+					PedalSerial.close()
 				sys.exit()
 
 			# Missed packet detection, last byte of usb packet counts up
@@ -267,7 +274,6 @@ try:
 					print 'PEDAL STOP'
 					break
 
-				
 		# Send stop byte and get rid of any unread data
 		STBserial.write('\x02')
 		STBserial.flush()
@@ -278,24 +284,9 @@ try:
 
 		if inputs['write_data'] == 1:
 
-
-			data_dir = 'TestData'
-			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
-			task_dir = 'Task' + str(inputs['task'])
-			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
-
-			if [] == glob.glob(data_dir):
-				print "MAKING " + data_dir
-				os.mkdir(data_dir)
-
-			if [] == glob.glob(data_dir + '/' + subject_dir):
-				print "MAKING " + subject_dir
-				os.mkdir(data_dir + '/' + subject_dir)
-
 			print 'WRITING DATA TO %s...' %test_filename
 
-			test_path = data_dir + '/' + subject_dir + '/' + test_filename + '.csv'
-			np.savetxt(test_path, DAT_hist[:(ii+1),0:15], delimiter=",")
+			np.savetxt(test_path + '.csv', DAT_hist[:(ii+1),0:15], delimiter=",")
 
 			print 'FINISHED WRITING'
 

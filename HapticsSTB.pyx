@@ -213,10 +213,10 @@ def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim  = 2] data, plot_objec
 	pl.draw()
 
 def to16bit(x):
-	if x > int('0b1111111111111111',2):
+	if x > int('0xFFFF',2):
 		raise ValueError
 
-	high = (x&int('0b1111111100000000',2))>>8
-	low = x&int('0b11111111',2)
+	high = (x&int('0xFF00',2))>>8
+	low = x&int('0x00FF',2)
 
 	return chr(high)+chr(low)

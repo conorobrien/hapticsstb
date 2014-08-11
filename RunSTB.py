@@ -3,7 +3,9 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time, cv2, threading
+import serial, sys, os, glob, pdb, time, threading
+from cv2 import VideoCapture, VideoWriter
+from cv2.cv import CV_FOURCC
 from HapticsSTB import *
 
 # Dict for command line inputs, contains default values
@@ -65,23 +67,24 @@ except (NameError, ValueError, IndexError):
 ## Video Capture Setup
 if inputs['video_capture']:
 	# OpenCV initiliazation, create videoCapture object and codec
-	cap = cv2.VideoCapture(-1)
-	fourcc = cv2.cv.CV_FOURCC(*'XVID')
+	cap = VideoCapture(-1)
+	fourcc = CV_FOURCC(*'XVID')
 
 	# Thread function for video capture
 	class OpenCVThread(threading.Thread):
-		def __init__(self, cap, out):
+		def __init__(self, cap, out, window=0):
 			threading.Thread.__init__(self)
 			self.stop = threading.Event()
 			self.out = out
 			self.cap = cap
 			self.i = 0
+			self.window = window
+			
 		def run(self):
 			while not self.stop.is_set():
 				ret, frame = self.cap.read()
-				if ret==True:
-					frame = cv2.flip(frame,0)
-			    	self.out.write(frame)
+		    	self.out.write(frame)
+
 
 
 # Graphing Initialization
@@ -215,8 +218,8 @@ try:
 		# Video prep, creates video folder
 		if inputs['video_capture']:
 			# pdb.set_trace()
-			out = cv2.VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
-			videoThread = OpenCVThread(cap, out)
+			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
+			videoThread = OpenCVThread(cap, out, 1)
 			videoThread.start()
 
 		print 'STARTING DATA COLLECTION...'

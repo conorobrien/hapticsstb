@@ -3,7 +3,7 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time, threading
+import serial, sys, os, glob, pdb, time, threading, subprocess
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
 from HapticsSTB import *
@@ -27,7 +27,7 @@ help_message = """ ******
 -subject: Subject ID number
 -task: Task ID number
 -pedal: use foot pedal for controlling sampling
--video_capture: Record video (right now from webcam)
+-video_capture: Record video from Da Vinci
 -write_data: Write data to timestamped file
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
@@ -50,7 +50,7 @@ try:
 		for arg in range(1,len(sys.argv)):
 			command = sys.argv[arg]
 			if command[0] == '-':
-				if command == '-help':
+				if command == '-help' or command == '-h':
 					print help_message
 					sys.exit()
 				else:
@@ -67,6 +67,14 @@ except (NameError, ValueError, IndexError):
 ## Video Capture Setup
 if inputs['video_capture']:
 	# OpenCV initiliazation, create videoCapture object and codec
+
+	# Switch Capture Card input to s-video
+	err = subprocess.call(['v4l2-ctl', '-i 4'])
+	
+	if err == 1:
+		print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+		sys.exit()
+
 	cap = VideoCapture(-1)
 	fourcc = CV_FOURCC(*'XVID')
 
@@ -77,8 +85,6 @@ if inputs['video_capture']:
 			self.stop = threading.Event()
 			self.out = out
 			self.cap = cap
-			self.i = 0
-			self.window = window
 			
 		def run(self):
 			while not self.stop.is_set():
@@ -100,6 +106,7 @@ if inputs['graphing']:
 
 if sys.platform == 'darwin':
 	device_folder = '/dev/tty.usbmodem*'
+	print "Mac support out of date and untested, try linux"
 
 elif sys.platform == 'linux2':
 	device_folder = '/dev/ttyACM*'
@@ -114,13 +121,13 @@ STBserial = PedalSerial = 0
 
 for dev in devices:
 	# Step through devices, pinging each one for a device ID
-	test_device = serial.Serial(dev, timeout=0.1)
+	test_device = serial.Serial(dev, timeout=0.05)
 	test_device.write('\x02')
 	time.sleep(0.05)
 	test_device.flushInput()
 	test_device.write('\x03')
  	
-	devID = test_device.read(200)[-1]	#Read out everything in the buffer, and look at the last byte for the ID
+	devID = test_device.read(200)[-1]	#Read out everything in the buffer (will timeout), and look at the last byte for the ID
 
 	if devID == '\x01':
 		STBserial = test_device
@@ -148,7 +155,7 @@ for ii in range(0, inputs['bias_sample']):
 
 	dat = STBserial.read(31)
 	
-	if dat == '':
+	if dat == '' or len(dat) < 31:
 		print 'NOTHING RECIEVED, EXITING...'
 		STBserial.close()
 		if inputs['pedal']:
@@ -200,7 +207,7 @@ try:
 					print 'QUITTING...'
 					sys.exit()
 
-		# File operations, checks to make sure everything exists and timestamps
+		# File operations, checks to make sure folders exist and  creates timestamp
 		if inputs['write_data'] or inputs['video_capture']:
 			data_dir = 'TestData'
 			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
@@ -218,7 +225,7 @@ try:
 		# Video prep, creates video folder
 		if inputs['video_capture']:
 			# pdb.set_trace()
-			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
+			out = VideoWriter(test_path+'.avi',fourcc, 29.970, (720,480))
 			videoThread = OpenCVThread(cap, out, 1)
 			videoThread.start()
 
@@ -230,15 +237,16 @@ try:
 		if inputs['graphing'] == 2:
 			DAT_hist = np.zeros((num_samples,21))
 		else:
-			DAT_hist = np.zeros((num_samples, 15))
+			DAT_hist = np.zeros((num_samples,15))
 
+		# Send start byte with sample rate
 		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
 
 		for ii in range(0,num_samples):
 
 			dat = STBserial.read(31)
 			
-			if dat == '':
+			if dat == '' or len(dat) < 31:
 				print 'NOTHING RECIEVED, EXITING...'
 				STBserial.close()
 				if inputs['pedal']:
@@ -294,13 +302,9 @@ try:
 			videoThread.stop.set()
 
 		if inputs['write_data'] == 1:
-
 			print 'WRITING DATA TO %s...' %test_filename
-
 			np.savetxt(test_path + '.csv', DAT_hist[:(ii+1),0:15], delimiter=",")
-
 			print 'FINISHED WRITING'
-
 
 		print '*'*80
 

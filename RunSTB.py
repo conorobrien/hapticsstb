@@ -7,6 +7,7 @@ import serial, sys, os, glob, pdb, time, threading
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
 from HapticsSTB import *
+from STBClassTest import *
 
 # Dict for command line inputs, contains default values
 inputs = {	'subject': 1,
@@ -86,7 +87,6 @@ if inputs['video_capture']:
 		    	self.out.write(frame)
 
 
-
 # Graphing Initialization
 if inputs['graphing']:
 
@@ -94,6 +94,7 @@ if inputs['graphing']:
 	print 'Forcing sample rate to 500Hz for graphing'
 
 	plot_objects = GraphingSetup(inputs)
+
 
 # Auto Detection for USB, not needed on mac, but linux serial devices only
 # show up as ttyACMn, not with a unique ID
@@ -110,7 +111,7 @@ if len(devices) < 2:
 	print 'NOT ENOUGH DEVICES CONNECTED, EXITING...'
 	sys.exit()
 
-STBserial = PedalSerial = 0
+STB = PedalSerial = 0
 
 for dev in devices:
 	# Step through devices, pinging each one for a device ID
@@ -123,8 +124,8 @@ for dev in devices:
 	devID = test_device.read(200)[-1]	#Read out everything in the buffer, and look at the last byte for the ID
 
 	if devID == '\x01':
-		STBserial = test_device
-		STBserial.timeout = 0.05
+		test_device.timeout = 0.05
+		STB = HapticsSTB(test_device, inputs['sample_rate'])
 	elif devID == '\x02':
 		PedalSerial = test_device
 		PedalSerial.timeout = 0
@@ -132,9 +133,10 @@ for dev in devices:
 		print 'UNKNOWN DEVICE, EXITING...'
 		sys.exit()
 
-if not STBserial or (inputs['pedal'] and not PedalSerial):
+if not STB or (inputs['pedal'] and not PedalSerial):
 	print 'NOT ALL DEVICES FOUND, EXITING...'
 	sys.exit()
+
 
 ## BIASING
 # read first 500 samples and average to get bias
@@ -142,35 +144,25 @@ if not STBserial or (inputs['pedal'] and not PedalSerial):
 print "DON'T TOUCH BOARD, BIASING..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
-STBserial.write('\x01' + to16bit(inputs['sample_rate']))
-
+STB.start()
 for ii in range(0, inputs['bias_sample']):
 
-	dat = STBserial.read(31)
-	
-	if dat == '':
+	try:
+		dat = STB.read()
+	except EmptyPacketError:
 		print 'NOTHING RECIEVED, EXITING...'
-		STBserial.close()
+		STB.close()
 		if inputs['pedal']:
 			PedalSerial.close()
 		sys.exit()
 
-	packet = ord(dat[30])
-	
-	if ii == 0:
-		packet_old = packet
-	elif (packet != (packet_old+1)%256):
-		print 'MISSED PACKET', packet, packet_old
-
-	packet_old = packet
 	bias_hist[:,ii] = Serial2M40Volts(dat)
 
 bias = np.mean(bias_hist, axis=1).T
 print "SAFE TO TOUCH"
 print 'BIAS MATRIX'
 print bias
-STBserial.write('\x02')
-
+STB.stop()
 ## SAMPLING
 # Code takes samples for seconds defined in sample_time
 
@@ -182,13 +174,8 @@ if inputs['pedal']:
 else:
 	num_samples = inputs['sample_rate']*inputs['sample_time']
 
-
-
-frame_start = time.time()
-
 try:
 	while 1:
-
 		# Pedal input blocking, single or double tap starts trial, triple quits
 		if inputs['pedal']:		
 			print 'WAITING FOR PEDAL INPUT...'
@@ -215,7 +202,7 @@ try:
 				print "MAKING " + subject_dir
 				os.mkdir(data_dir + '/' + subject_dir)
 
-		# Video prep, creates video folder
+		# Video prep, creates video writer object and starts thread
 		if inputs['video_capture']:
 			# pdb.set_trace()
 			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
@@ -232,28 +219,20 @@ try:
 		else:
 			DAT_hist = np.zeros((num_samples, 15))
 
-		STBserial.write('\x01' + to16bit(inputs['sample_rate']))
+		STB.start()
 
 		for ii in range(0,num_samples):
 
-			dat = STBserial.read(31)
-			
-			if dat == '':
+			try:
+				dat = STB.read()
+			except EmptyPacketError:
 				print 'NOTHING RECIEVED, EXITING...'
-				STBserial.close()
+				STB.stop()
 				if inputs['pedal']:
 					PedalSerial.close()
 				if inputs['video_capture']:
 					videoThread.stop.set()
 				sys.exit()
-
-			# Missed packet detection, last byte of usb packet counts up
-			packet = ord(dat[30])
-			if ii == 0:
-				packet_old = packet
-			elif packet != (packet_old+1)%256:
-				print 'MISSED PACKET', packet, packet_old
-			packet_old = packet
 
 			DAT_hist[ii, 0:15] = Serial2Data(dat, bias)
 
@@ -263,8 +242,7 @@ try:
 			# Update Graph
 			if inputs['graphing']:
 				if ii % inputs['update_interval'] == 0 and ii > inputs['line_length']:
-						current_frame = ii + 1
-						updated_data = DAT_hist[(current_frame - inputs['line_length']):current_frame,:]
+						updated_data = DAT_hist[(ii + 1 - inputs['line_length']):(ii+1),:]
 						GraphingUpdater(inputs, updated_data, plot_objects)
 
 			if inputs['pedal']:
@@ -272,21 +250,18 @@ try:
 
 				if pedal_input == '\x03':
 					print 'QUITTING...'
-					STBserial.close()
+					STB.close()
 					if inputs['pedal']:
 						PedalSerial.close()
 					if inputs['video_capture']:
 						videoThread.stop.set()
-
-
 					sys.exit()
 				elif pedal_input == '\x02':
 					print 'PEDAL STOP'
 					break
 
-		# Send stop byte and get rid of any unread data
-		STBserial.write('\x02')
-		STBserial.flush()
+		STB.stop()
+
 		print 'FINISHED SAMPLING'
 		print time.time()-start
 
@@ -296,11 +271,8 @@ try:
 		if inputs['write_data'] == 1:
 
 			print 'WRITING DATA TO %s...' %test_filename
-
 			np.savetxt(test_path + '.csv', DAT_hist[:(ii+1),0:15], delimiter=",")
-
 			print 'FINISHED WRITING'
-
 
 		print '*'*80
 
@@ -309,7 +281,8 @@ try:
 
 except KeyboardInterrupt:
 	print '***** ENDING TESTING *****'
-	STBserial.close()
+	# STBserial.close()
+	STB.stop()
 	if inputs['pedal']:
 		PedalSerial.close()
 	if inputs['video_capture']:

@@ -163,6 +163,7 @@ def GraphingSetup(inputs):
 
 	else:
 		print "INVALID GRAPHING MODE"
+		return 0
 
 	return plot_objects
 

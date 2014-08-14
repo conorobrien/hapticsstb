@@ -3,7 +3,7 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time, threading
+import serial, sys, os, glob, pdb, time, threading, subprocess
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
 from HapticsSTB import *
@@ -28,7 +28,7 @@ help_message = """ ******
 -subject: Subject ID number
 -task: Task ID number
 -pedal: use foot pedal for controlling sampling
--video_capture: Record video (right now from webcam)
+-video_capture: Record video from Da Vinci
 -write_data: Write data to timestamped file
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
@@ -51,7 +51,7 @@ try:
 		for arg in range(1,len(sys.argv)):
 			command = sys.argv[arg]
 			if command[0] == '-':
-				if command == '-help':
+				if command == '-help' or command == '-h':
 					print help_message
 					sys.exit()
 				else:
@@ -68,6 +68,14 @@ except (NameError, ValueError, IndexError):
 ## Video Capture Setup
 if inputs['video_capture']:
 	# OpenCV initiliazation, create videoCapture object and codec
+
+	# Switch Capture Card input to s-video
+	err = subprocess.call(['v4l2-ctl', '-i 4'])
+	
+	if err == 1:
+		print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+		sys.exit()
+
 	cap = VideoCapture(-1)
 	fourcc = CV_FOURCC(*'XVID')
 
@@ -87,6 +95,7 @@ if inputs['video_capture']:
 		    	self.out.write(frame)
 
 
+
 # Graphing Initialization
 if inputs['graphing']:
 
@@ -95,12 +104,12 @@ if inputs['graphing']:
 
 	plot_objects = GraphingSetup(inputs)
 
-
 # Auto Detection for USB, not needed on mac, but linux serial devices only
 # show up as ttyACMn, not with a unique ID
 
 if sys.platform == 'darwin':
 	device_folder = '/dev/tty.usbmodem*'
+	print "Mac support out of date and untested, try linux"
 
 elif sys.platform == 'linux2':
 	device_folder = '/dev/ttyACM*'
@@ -137,7 +146,6 @@ if not STB or (inputs['pedal'] and not PedalSerial):
 	print 'NOT ALL DEVICES FOUND, EXITING...'
 	sys.exit()
 
-
 ## BIASING
 # read first 500 samples and average to get bias
 
@@ -155,6 +163,7 @@ for ii in range(0, inputs['bias_sample']):
 		if inputs['pedal']:
 			PedalSerial.close()
 		sys.exit()
+
 
 	bias_hist[:,ii] = Serial2M40Volts(dat)
 
@@ -174,8 +183,10 @@ if inputs['pedal']:
 else:
 	num_samples = inputs['sample_rate']*inputs['sample_time']
 
+
 try:
 	while 1:
+
 		# Pedal input blocking, single or double tap starts trial, triple quits
 		if inputs['pedal']:		
 			print 'WAITING FOR PEDAL INPUT...'
@@ -187,7 +198,7 @@ try:
 					print 'QUITTING...'
 					sys.exit()
 
-		# File operations, checks to make sure everything exists and timestamps
+		# File operations, checks to make sure folders exist and  creates timestamp
 		if inputs['write_data'] or inputs['video_capture']:
 			data_dir = 'TestData'
 			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
@@ -202,7 +213,7 @@ try:
 				print "MAKING " + subject_dir
 				os.mkdir(data_dir + '/' + subject_dir)
 
-		# Video prep, creates video writer object and starts thread
+		# Video prep, creates video folder
 		if inputs['video_capture']:
 			# pdb.set_trace()
 			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
@@ -234,6 +245,7 @@ try:
 					videoThread.stop.set()
 				sys.exit()
 
+
 			DAT_hist[ii, 0:15] = Serial2Data(dat, bias)
 
 			if inputs['graphing'] == 2:
@@ -255,6 +267,8 @@ try:
 						PedalSerial.close()
 					if inputs['video_capture']:
 						videoThread.stop.set()
+
+
 					sys.exit()
 				elif pedal_input == '\x02':
 					print 'PEDAL STOP'
@@ -271,8 +285,11 @@ try:
 		if inputs['write_data'] == 1:
 
 			print 'WRITING DATA TO %s...' %test_filename
+
 			np.savetxt(test_path + '.csv', DAT_hist[:(ii+1),0:15], delimiter=",")
+
 			print 'FINISHED WRITING'
+
 
 		print '*'*80
 

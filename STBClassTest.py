@@ -20,7 +20,7 @@ class HapticsSTB:
 		self.device.write('\x02')
 		self.device.flush()
 
-	def readSerial(self):
+	def read(self):
 		dat = self.device.read(31)
 
 		if dat == '' or len(dat) != 31:

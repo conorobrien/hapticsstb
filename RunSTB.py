@@ -7,7 +7,7 @@ import serial, sys, os, glob, pdb, time, threading, subprocess
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
 from HapticsSTB import *
-from STBClassTest import *
+from STBClass import *
 
 # Dict for command line inputs, contains default values
 inputs = {	'subject': 1,
@@ -21,6 +21,7 @@ inputs = {	'subject': 1,
 			'sample_rate': 3000,
 			'pedal': 0,
 			'video_capture': 0,
+			'compress':0,
 }
 
 # Message displayed for command line help
@@ -30,9 +31,10 @@ help_message = """ ******
 -pedal: use foot pedal for controlling sampling
 -video_capture: Record video from Da Vinci
 -write_data: Write data to timestamped file
+-compress: Compresses data after recording, produces a 7z archive
 -bias_sample: Number of samples averaged to get Mini40 biasing vector
 -sample_time: Length of sample in seconds
--sample_rate: data sampling rate in Hz (forced to 500Hz for plotting)
+-sample_rate: data sampling rate in Hz (default 3kHz, forced to 500Hz for plotting)
 -graphing: reduce sample rate and display line plots for debugging
     1: F/T graph
     2: Mini40 Channel Voltages
@@ -70,29 +72,28 @@ if inputs['video_capture']:
 	# OpenCV initiliazation, create videoCapture object and codec
 
 	# Switch Capture Card input to s-video
-	err = subprocess.call(['v4l2-ctl', '-i 4'])
+	# err = subprocess.call(['v4l2-ctl', '-i 4'])
 	
-	if err == 1:
-		print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
-		sys.exit()
+	# if err == 1:
+	# 	print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+	# 	sys.exit()
 
 	cap = VideoCapture(-1)
 	fourcc = CV_FOURCC(*'XVID')
 
 	# Thread function for video capture
 	class OpenCVThread(threading.Thread):
-		def __init__(self, cap, out, window=0):
+		def __init__(self, cap, out):
 			threading.Thread.__init__(self)
 			self.stop = threading.Event()
 			self.out = out
 			self.cap = cap
-			self.i = 0
-			self.window = window
 			
 		def run(self):
 			while not self.stop.is_set():
 				ret, frame = self.cap.read()
-		    	self.out.write(frame)
+				if ret == True:
+					self.out.write(frame)
 
 
 
@@ -213,11 +214,10 @@ try:
 				print "MAKING " + subject_dir
 				os.mkdir(data_dir + '/' + subject_dir)
 
-		# Video prep, creates video folder
+		# Video prep
 		if inputs['video_capture']:
-			# pdb.set_trace()
 			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
-			videoThread = OpenCVThread(cap, out, 1)
+			videoThread = OpenCVThread(cap, out)
 			videoThread.start()
 
 		print 'STARTING DATA COLLECTION...'
@@ -289,6 +289,12 @@ try:
 			np.savetxt(test_path + '.csv', DAT_hist[:(ii+1),0:15], delimiter=",")
 
 			print 'FINISHED WRITING'
+
+			if inputs['compress']:
+
+				err = subprocess.call(['7z','a', '-w=' + test_path,test_filename + '.7z', test_filenam e+ '.*'])
+
+
 
 
 		print '*'*80

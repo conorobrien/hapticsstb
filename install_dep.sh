@@ -1,7 +1,7 @@
 
 sudo apt-get update && apt-get upgrade
 
-sudo apt-get install -y build-essential vlc v4l-utils
+sudo apt-get install -y build-essential vlc v4l-utils p7zip-full
 sudo apt-get install -y python-dev python-numpy python-matplotlib python-opencv python-pip
 
 sudo pip install --upgrade pip

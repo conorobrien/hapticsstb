@@ -3,80 +3,24 @@
 
 import pylab as pl
 import numpy as np
-import serial, sys, os, glob, pdb, time, threading, subprocess
+import sys, os, glob, pdb, time, threading, subprocess
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
 from HapticsSTB import *
-from STBClass import *
+from STBClassTest import *
 
-# Dict for command line inputs, contains default values
-inputs = {	'subject': 1,
-			'task': 1,
-			'graphing': 0,
-			'line_length': 250,
-			'bias_sample': 100,
-			'update_interval': 50,
-			'sample_time': 5,
-			'write_data': 0,
-			'sample_rate': 3000,
-			'pedal': 0,
-			'video_capture': 0,
-			'compress':0,
-}
-
-# Message displayed for command line help
-help_message = """ ******
--subject: Subject ID number
--task: Task ID number
--pedal: use foot pedal for controlling sampling
--video_capture: Record video from Da Vinci
--write_data: Write data to timestamped file
--compress: Compresses data after recording, produces a 7z archive
--bias_sample: Number of samples averaged to get Mini40 biasing vector
--sample_time: Length of sample in seconds
--sample_rate: data sampling rate in Hz (default 3kHz, forced to 500Hz for plotting)
--graphing: reduce sample rate and display line plots for debugging
-    1: F/T graph
-    2: Mini40 Channel Voltages
-    3: Accelerometer Voltages
-    4: Single Point Position
-(GRAPHING OPTIONS)
--line_length: number of samples shown on graph
--update_interval: Number of samples between plot updates
-*****
-"""
-
-## Input handling, inputs beginning with '-' are considered commands, following
-# string is converted to an int and assigned to the inputs dict
-try:
-	if len(sys.argv) > 1:
-		for arg in range(1,len(sys.argv)):
-			command = sys.argv[arg]
-			if command[0] == '-':
-				if command == '-help' or command == '-h':
-					print help_message
-					sys.exit()
-				else:
-					if command[1:] in inputs.keys():
-						inputs[command[1:].lower()] = int(sys.argv[arg+1])
-					else:
-						print "Invalid Command!"
-						sys.exit()
-except (NameError, ValueError, IndexError):
-	print "Invalid Command!"
-	sys.exit()
-
+inputs = ArgParse(sys.argv)
 
 ## Video Capture Setup
 if inputs['video_capture']:
-	# OpenCV initiliazation, create videoCapture object and codec
+	# OpenCV initialization, create videoCapture object and codec
 
 	# Switch Capture Card input to s-video
-	# err = subprocess.call(['v4l2-ctl', '-i 4'])
+	err = subprocess.call(['v4l2-ctl', '-i 4'])
 	
-	# if err == 1:
-	# 	print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
-	# 	sys.exit()
+	if err == 1:
+		print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+		sys.exit()
 
 	cap = VideoCapture(-1)
 	fourcc = CV_FOURCC(*'XVID')
@@ -108,44 +52,7 @@ if inputs['graphing']:
 # Auto Detection for USB, not needed on mac, but linux serial devices only
 # show up as ttyACMn, not with a unique ID
 
-if sys.platform == 'darwin':
-	device_folder = '/dev/tty.usbmodem*'
-	print "Mac support out of date and untested, try linux"
-
-elif sys.platform == 'linux2':
-	device_folder = '/dev/ttyACM*'
-
-devices = glob.glob(device_folder)
-
-if len(devices) < 2:
-	print 'NOT ENOUGH DEVICES CONNECTED, EXITING...'
-	sys.exit()
-
-STB = PedalSerial = 0
-
-for dev in devices:
-	# Step through devices, pinging each one for a device ID
-	test_device = serial.Serial(dev, timeout=0.1)
-	test_device.write('\x02')
-	time.sleep(0.05)
-	test_device.flushInput()
-	test_device.write('\x03')
- 	
-	devID = test_device.read(200)[-1]	#Read out everything in the buffer, and look at the last byte for the ID
-
-	if devID == '\x01':
-		test_device.timeout = 0.05
-		STB = HapticsSTB(test_device, inputs['sample_rate'])
-	elif devID == '\x02':
-		PedalSerial = test_device
-		PedalSerial.timeout = 0
-	else:
-		print 'UNKNOWN DEVICE, EXITING...'
-		sys.exit()
-
-if not STB or (inputs['pedal'] and not PedalSerial):
-	print 'NOT ALL DEVICES FOUND, EXITING...'
-	sys.exit()
+(STB, PedalSerial) = DeviceID(inputs)
 
 ## BIASING
 # read first 500 samples and average to get bias
@@ -154,6 +61,7 @@ print "DON'T TOUCH BOARD, BIASING..."
 bias_hist = np.zeros((6,inputs['bias_sample']))
 
 STB.start()
+
 for ii in range(0, inputs['bias_sample']):
 
 	try:
@@ -216,7 +124,7 @@ try:
 
 		# Video prep
 		if inputs['video_capture']:
-			out = VideoWriter(test_path+'.avi',fourcc, 20.0, (640,480))
+			out = VideoWriter(test_path+'.avi',fourcc, 29.970, (720,480))
 			videoThread = OpenCVThread(cap, out)
 			videoThread.start()
 
@@ -290,10 +198,11 @@ try:
 
 			print 'FINISHED WRITING'
 
-			if inputs['compress']:
+		if inputs['compress']:
 
-				err = subprocess.call(['7z','a', '-w=' + test_path,test_filename + '.7z', test_filenam e+ '.*'])
-
+			os.chdir(data_dir + '/' + subject_dir)
+			err = subprocess.call(['7z','a',test_filename + '.7z', test_filename+ '.*'])
+			os.chdir('../..')
 
 
 

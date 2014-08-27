@@ -51,15 +51,15 @@ def Serial2Acc(str x):
 
 	return volts
 
-# Takes serial packet, returns Mini40 Voltages
-
-# [C0, C1, C2, C3, C4, C5] = Serial2M40Volts(data)
-
+# Takes serial packet and bias, calls other two functions and returns df
 def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	FT = Serial2FT(x, bias)
 	ACC = Serial2Acc(x)
 
 	return np.hstack((FT, ACC))
+
+# Takes serial packet, returns Mini40 Voltages
+# [C0, C1, C2, C3, C4, C5] = Serial2M40Volts(data)
 
 def Serial2M40Volts(str x):
 	cdef int i, j, y
@@ -74,100 +74,18 @@ def Serial2M40Volts(str x):
 
 	return volts
 
-def GraphingSetup(inputs):
+# Convenience function for creating two-byte serial packet for ints
+def to16bit(x):
+	if x > int('0xFFFF',16):
+		raise ValueError
 
-	line_length = inputs['line_length']
-	pl.ion()
+	high = (x&int('0xFF00',16))>>8
+	low = x&int('0x00FF',16)
 
-	if inputs['graphing'] in [1,2,3]:
-		start_time = -1*(line_length-1)/500.0
-		times = np.linspace(start_time, 0, line_length)
+	return chr(high)+chr(low)
 
-	# Force/Torque Graphing
-	if inputs['graphing'] == 1:
 
-		f, (axF, axT) =pl.subplots(2,1, sharex=True)
-
-		axF.axis([start_time, 0,-5,5])
-		axF.grid()
-		axT.axis([start_time, 0,-.5,.5])
-		axT.grid()
-
-		FXline, = axF.plot(times, [0] * line_length, color = 'r')
-		FYline, = axF.plot(times, [0] * line_length, color = 'g')
-		FZline, = axF.plot(times, [0] * line_length, color = 'b')
-		TXline, = axT.plot(times, [0] * line_length, color = 'c')
-		TYline, = axT.plot(times, [0] * line_length, color = 'm')
-		TZline, = axT.plot(times, [0] * line_length, color = 'y')
-
-		axF.legend([FXline, FYline, FZline], ['FX', 'FY', 'FZ'])
-		axT.legend([TXline, TYline, TZline], ['TX', 'TY', 'TZ'])
-
-		plot_objects = (FXline, FYline, FZline, TXline, TYline, TZline)
-
-		pl.draw()
-
-	# Mini40 Voltage Graphing
-	elif inputs['graphing'] == 2:
-
-		pl.axis([start_time, 0,-2,2])
-		pl.grid()
-
-		C0line, = pl.plot(times, [0] * line_length, color = 'brown')
-		C1line, = pl.plot(times, [0] * line_length, color = 'yellow')
-		C2line, = pl.plot(times, [0] * line_length, color = 'green')
-		C3line, = pl.plot(times, [0] * line_length, color = 'blue')
-		C4line, = pl.plot(times, [0] * line_length, color = 'purple')
-		C5line, = pl.plot(times, [0] * line_length, color = 'gray')
-
-		pl.legend([C0line, C1line, C2line, C3line, C4line, C5line], 
-			['Channel 0', 'Channel 1','Channel 2','Channel 3','Channel 4','Channel 5'], loc=2)
-
-		plot_objects = (C0line, C1line, C2line, C3line, C4line, C5line)
-		pl.draw()
-
-	#Accelerometer Voltage Graphing
-	elif inputs['graphing'] == 3:
-
-		f, (ax1, ax2, ax3) =pl.subplots(3,1, sharex=True)
-
-		ax1.axis([start_time, 0,-.1,3.4])
-		ax2.axis([start_time, 0,-.1,3.4])
-		ax3.axis([start_time, 0,-.1,3.4])
-		ax1.grid()
-		ax2.grid()
-		ax3.grid()
-
-		A1Xline, = ax1.plot(times, [0] * line_length, color = 'r')
-		A1Yline, = ax1.plot(times, [0] * line_length, color = 'g')
-		A1Zline, = ax1.plot(times, [0] * line_length, color = 'b')
-		A2Xline, = ax2.plot(times, [0] * line_length, color = 'r')
-		A2Yline, = ax2.plot(times, [0] * line_length, color = 'g')
-		A2Zline, = ax2.plot(times, [0] * line_length, color = 'b')
-		A3Xline, = ax3.plot(times, [0] * line_length, color = 'r')
-		A3Yline, = ax3.plot(times, [0] * line_length, color = 'g')
-		A3Zline, = ax3.plot(times, [0] * line_length, color = 'b')
-
-		plot_objects = (A1Xline, A1Yline, A1Zline, A2Xline, A2Yline, A2Zline, A3Xline, A3Yline, A3Zline)
-		pl.draw()
-
-	# 2D Position Plotting
-	elif inputs['graphing'] == 4:
-
-		pl.axis([-.075, .075, -.075, .075])
-		pl.grid()
-		touch_point, = pl.plot(0,0, marker="o", markersize=50)
-
-		plot_objects = (touch_point,)
-		pl.draw()
-
-	else:
-		print "INVALID GRAPHING MODE"
-		return 0
-
-	return plot_objects
-
-def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim  = 2] data, plot_objects):
+def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
 
 	if inputs['graphing'] == 1:
 
@@ -214,12 +132,3 @@ def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim  = 2] data, plot_objec
 		plot_objects[0].set_xdata(x)
 
 	pl.draw()
-
-def to16bit(x):
-	if x > int('0xFFFF',16):
-		raise ValueError
-
-	high = (x&int('0xFF00',16))>>8
-	low = x&int('0x00FF',16)
-
-	return chr(high)+chr(low)

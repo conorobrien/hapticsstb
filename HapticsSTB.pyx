@@ -39,7 +39,7 @@ def Serial2FT(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 # [Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Acc(data)
 
 def Serial2Acc(str x):
-	volts = np.zeros((9), dtype = np.float64)
+	gees = np.zeros((9), dtype = np.float64)
 	acc_order = [0,1,2,5,3,4,8,6,7] #Puts acc channels in x,y,z order
 
 	cdef int i,j,y
@@ -47,9 +47,9 @@ def Serial2Acc(str x):
 	for i in range(0,9):
 		j = (acc_order[i]+6)*2
 		y = (ord(x[j])<<8) + (ord(x[j+1]))
-		volts[i] = <float>y/1241
+		gees[i] = ((<float>y/1241)-1.65)*(15.0/3.3)
 
-	return volts
+	return gees
 
 # Takes serial packet and bias, calls other two functions and returns df
 def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):

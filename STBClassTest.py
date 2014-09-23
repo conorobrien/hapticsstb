@@ -56,7 +56,7 @@ class STBSensor:
 
 def ArgParse(args):
 	# Dict for command line inputs, contains default values
-	inputs = {	'subject': 1,
+	inputs = {	'subject': 2,
 				'task': 1,
 				'graphing': 0,
 				'line_length': 250,
@@ -72,14 +72,14 @@ def ArgParse(args):
 
 	# Message displayed for command line help
 	help_message = """ ******
-	-subject: Subject ID number
-	-task: Task ID number
-	-pedal: use foot pedal for controlling sampling
-	-video_capture: Record video from Da Vinci
-	-write_data: Write data to timestamped file
-	-compress: Compresses data after recording, produces a 7z archive
-	-bias_sample: Number of samples averaged to get Mini40 biasing vector
-	-sample_time: Length of sample in seconds
+	-subject: Subject ID number (2)
+	-task: Task ID number (1)
+	-pedal: use foot pedal for controlling sampling (1)
+	-video_capture: Record video from Da Vinci (1)
+	-write_data: Write data to timestamped file (1)
+	-compress: Compresses data after recording, produces a 7z archive (0)
+	-bias_sample: Number of samples averaged to get Mini40 biasing vector (100)
+	-sample_time: Length of sample in seconds (5)
 	-sample_rate: data sampling rate in Hz (default 3kHz, forced to 500Hz for plotting)
 	-graphing: reduce sample rate and display line plots for debugging
 	    1: F/T graph
@@ -87,8 +87,8 @@ def ArgParse(args):
 	    3: Accelerometer Voltages
 	    4: Single Point Position
 	(GRAPHING OPTIONS)
-	-line_length: number of samples shown on graph
-	-update_interval: Number of samples between plot updates
+	-line_length: number of samples shown on graph (250)
+	-update_interval: Number of samples between plot updates (50)
 	*****
 	"""
 

@@ -47,7 +47,7 @@ def Serial2Acc(str x):
 	for i in range(0,9):
 		j = (acc_order[i]+6)*2
 		y = (ord(x[j])<<8) + (ord(x[j+1]))
-		#gees[i] = ((<float>y/1241)-1.65)*(15.0/3.3)
+		# gees[i] = ((<float>y/1241)-1.65)*(15.0/3.3)
 		gees[i] = <float>y/1241
 
 	return gees

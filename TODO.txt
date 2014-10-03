@@ -1,0 +1,34 @@
+- Make list of everything we need to take with us, and tape it onto the box
+- Make it return error on 0 bias matrix (no power)
+- Change timestamping to remove :, 
+- write graphing code so that we can see acc and forces at the same time
+- order correct sutures, put ruler in box
+- get velcro or lockstrip stuff or rubber for foot pedal positioning, and some cable management stuff so it doesnt get in the way
+-make a dummy plate or covering strip to protect velcro
+- make belly
+- write documentation
+- be careful abou the biasing vector, make sure that theres no force on the board
+- Ask katherine about sharps disposal, osha sharps box or something
+- general clean up
+- Figure out rearange for computer and display
+	- buy longer s-video
+	- longer pedal cable
+-order more o-rings, maybe some different types
+-record specialty of surgeon, some might be worse at different tasks than others, ex: ent don't do any suturing
+-count and put aside tools for us to use
+-update da vinvi inventory
+
+
+
+SUTURING TASK
+-forces usually below 2N, occasional -4N
+-make suturing lasercut platform larger, so the suture doesnt fall off.
+-took about 3 minutes
+-leave space below suturing dots to put needle down
+- Bring scissors to remove suture after we're done
+possible features:
+-wiggling during insertion
+
+RING ROLLERCOASTER #3
+- can actually see the force pretty well, low but measurable
+-

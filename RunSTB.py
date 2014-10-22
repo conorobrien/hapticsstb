@@ -169,12 +169,8 @@ try:
 				pedal_input = PedalSerial.read()
 
 				if pedal_input == '\x03':
-					print 'QUITTING...'
-					STB.close()
-					if inputs['pedal']:
-						PedalSerial.close()
-					if inputs['video_capture']:
-						videoThread.stop.set()
+					print 'THREE CLICKS'
+					break
 
 
 					sys.exit()

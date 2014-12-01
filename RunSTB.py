@@ -111,7 +111,7 @@ try:
 		if inputs['write_data'] or inputs['video_capture']:
 			data_dir = 'TestData'
 			subject_dir = 'Subject'+str(inputs['subject']).zfill(3)
-			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H:%M')
+			test_filename =  'S' + str(inputs['subject']).zfill(3) + 'T' + str(inputs['task']) +'_' + time.strftime('%m-%d_%H-%M')
 			test_path = data_dir + '/' + subject_dir + '/' + test_filename
 
 			if [] == glob.glob(data_dir):

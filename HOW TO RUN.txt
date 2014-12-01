@@ -1,0 +1,17 @@
+1: Open Terminator (bottom of screen)
+2: run "RunSTB -subject x -task y" with appropriate task and subject numbers
+3: End task using ctrl-c
+
+COMMON ERRORS
+-Bias vector is all zeros
+	-No power to STB, wiggle connector and try again
+-Bias vector is all ~4s
+	-Mini40 not plugged in
+-Serial Port is busy or unavailable
+	-Quit terminal and try again, usually happens after RunSTB crashes and doesn't close ports
+	-If during test, usually a plug has fallen out
+-NOT ENOUGH DEVICES CONNECTED error message
+	-USB connection is missing, check all plugs
+
+cd hapticsdaqteensy/
+./RunSTB.py

@@ -1,58 +1,141 @@
 import numpy as np
 import pylab as pl
-import serial, sys, glob, time
-from HapticsSTB_RT import *
+import serial, sys, glob, time, subprocess
+from hapticsstb_rt
+from cv2 import VideoCapture, VideoWriter
+from cv2.cv import CV_FOURCC
 
 # Error for HapticsSTB class
 class EmptyPacketError(Exception):
     pass
 
-# Class for the Sensor STB. Currently manages initialization, stop, start and reading raw serial packets
-class STBSensor:
-    def __init__(self, serial_device, sample_rate):
-        self.device = serial_device
-        if sample_rate > int('0xFFFF', 16):
+# Class for the Haptics STB. Currently manages initialization, stop, start and reading raw serial packets
+class STB:
+    def __init__(self, sample_rate, **kwargs):
+        if 'device' not in kwargs or kwargs['device'] == '':
+            if sys.plaform == 'darwin':
+                devices = glob.glob('/dev/tty.usbmodem*')
+            elif sys.plaform == 'linux':
+                devices = glob.glob('/dev/ttyACM*')
+
+            for dev in devices:
+                test_device = serial.Serial(dev, timeout=0.1)
+                test_device.write('\x02')
+                time.sleep(0.05)
+                test_device.flushInput()
+                test_device.write('\x03')
+
+                devID = test_device.read(200)[-1]
+
+                if devID == '\x01':
+                    self.device = test_device
+            else:
+                print 'STB not found! Check all cables!'
+                sys.exit()
+        else:
+            self.device = serial.Serial(kwargs['device'])
+        self.device.timeout = 0.05
+
+        if 'video' in kwargs and kwargs['video']:
+            self.video = True
+            err = subprocess.call(['v4l2-ctl', '-i 4'])
+            if err == 1:
+                print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+                sys.exit()
+
+            self.cap = VideoCapture(-1)
+            fourcc = CV_FOURCC(*'XVID')
+
+            self.record = True
+            self.out = VideoWriter(test_path+'.avi',fourcc, 29.970, (720,480))
+            self.video_thread = OpenCVThread(self.cap, self.out)
+        else:
+            self.video = False
+
+        if 'graphing' in kwargs:
+
+        if sample_rate > 3000:
+            print 'Sampling Rate too high!'
             raise ValueError
+
         high = (sample_rate&int('0xFF00', 16))>>8
         low = sample_rate&int('0x00FF', 16)
         self.sample_rate = chr(high)+chr(low)
 
-    def start(self):
+        self.bias_vector = np.zeros(6,dtype=np.float64)
+
+    def bias(self):
+        bias_hist = np.zeros((6,500))
+        self.start_sampling()
+        for ii in range(0, 500):
+            bias_hist[:,ii] = self.readM40V()
+
+        self.stop_sampling()
+        self.bias_vector = np.mean(bias_hist, axis=0)
+
+
+    def start_sampling(self):
         self.device.write('\x01' + self.sample_rate)
         self.packet_old = 300
 
-    def stop(self):
+        if self.video:
+            self.video_thread.start()
+
+    def stop_sampling(self):
         self.device.write('\x02')
         self.device.flush()
 
-    def read(self):
+    def read_packet(self):
         dat = self.device.read(31)
 
         if dat == '' or len(dat) != 31:
             raise EmptyPacketError
         self.packet = ord(dat[30])
         
-        if self.packet_old == 300:
+        if self.packet_old >= 256:
             self.packet_old = self.packet
         elif self.packet != (self.packet_old+1)%256:
             print 'MISSED PACKET', self.packet, self.packet_old
             self.packet_old = self.packet
         else:
             self.packet_old = self.packet
-        
         return dat
 
-    def readMini40(self):
-        dat = self.readSerial()
-        return Serial2M40(dat)
+    def readData(self):
+        dat = self.read_packet()
+        return HapticsSTB_RT.Serial2Data(dat, self.bias_vector)
+
+    def readM40(self):
+        dat = self.read_packet()
+        return HapticsSTB_RT.Serial2M40(dat, self.bias_vector)
+
+    def readM40V(self):
+        dat = self.read_packet()
+        return HapticsSTB_RT.Serial2M40Volts(dat)
 
     def readACC(self):
-        dat = self.readSerial()
-        return Serial2Acc(dat)
+        dat = self.read_packet()
+        return HapticsSTB_RT.Serial2Acc(dat)
 
     def close(self):
         self.stop()
         self.device.close()
+
+# Used by HapticsSTB class to access pedal
+# class Pedal:
+
+class OpenCVThread(threading.Thread):
+    def __init__(self, cap, out):
+        threading.Thread.__init__(self)
+        self.stop = threading.Event()
+        self.out = out
+        self.cap = cap
+        
+    def run(self):
+        while not self.stop.is_set():
+            ret, frame = self.cap.read()
+            if ret == True:
+                self.out.write(frame)
 
 def ArgParse(args):
     # Dict for command line inputs, contains default values

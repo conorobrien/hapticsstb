@@ -4,6 +4,11 @@
 
 #define RESET 			0x10
 
+#define LED_1			4
+#define LED_2			3
+#define LED_3			6
+#define LED_4			5
+
 #define SETUP_ACC 		0x64
 #define CONV_ACC 		0xC0
 #define CS_ACC 			7
@@ -125,6 +130,16 @@ void setupACC(void)
 void setup(void)
 {
 
+	// Turn on LEDS (only LED_4 connected)
+	pinMode(LED_1, OUTPUT);
+	pinMode(LED_2, OUTPUT);
+	pinMode(LED_3, OUTPUT);
+	pinMode(LED_4, OUTPUT);
+	digitalWrite(LED_1, HIGH);
+	digitalWrite(LED_2, HIGH);
+	digitalWrite(LED_3, HIGH);
+	digitalWrite(LED_4, HIGH);
+
 	// Start USB
 	Serial.begin(9600);
 
@@ -138,7 +153,6 @@ void setup(void)
 	SPI.begin();
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
 	SPI.setDataMode(SPI_MODE0);
-
 }
 
 void loop(void)

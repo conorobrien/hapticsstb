@@ -13,9 +13,5 @@ print sensor.bias_vector
 
 sensor.start_sampling()
 
-for ii = range(0,sample_length):
+for ii in range(0,sample_length):
     sensor_hist[ii,0:15] = sensor.readData()
-
-
-
-

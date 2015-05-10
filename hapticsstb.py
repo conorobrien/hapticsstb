@@ -1,9 +1,18 @@
 import numpy as np
 import pylab as pl
-import serial, sys, glob, time, subprocess
-from hapticsstb_rt
+
+import glob
+import serial
+import subprocess
+import sys
+import threading
+import time
+
 from cv2 import VideoCapture, VideoWriter
 from cv2.cv import CV_FOURCC
+
+import hapticsstb_rt
+
 
 # Error for HapticsSTB class
 class EmptyPacketError(Exception):
@@ -13,9 +22,9 @@ class EmptyPacketError(Exception):
 class STB:
     def __init__(self, sample_rate, **kwargs):
         if 'device' not in kwargs or kwargs['device'] == '':
-            if sys.plaform == 'darwin':
+            if sys.platform == 'darwin':
                 devices = glob.glob('/dev/tty.usbmodem*')
-            elif sys.plaform == 'linux':
+            elif sys.platform == 'linux':
                 devices = glob.glob('/dev/ttyACM*')
 
             for dev in devices:
@@ -52,7 +61,7 @@ class STB:
         else:
             self.video = False
 
-        if 'graphing' in kwargs:
+        # if 'graphing' in kwargs:
 
         if sample_rate > 3000:
             print 'Sampling Rate too high!'
@@ -103,19 +112,19 @@ class STB:
 
     def readData(self):
         dat = self.read_packet()
-        return HapticsSTB_RT.Serial2Data(dat, self.bias_vector)
+        return hapticsstb_rt.Serial2Data(dat, self.bias_vector)
 
     def readM40(self):
         dat = self.read_packet()
-        return HapticsSTB_RT.Serial2M40(dat, self.bias_vector)
+        return hapticsstb_rt.Serial2M40(dat, self.bias_vector)
 
     def readM40V(self):
         dat = self.read_packet()
-        return HapticsSTB_RT.Serial2M40Volts(dat)
+        return hapticsstb_rt.Serial2M40Volts(dat)
 
     def readACC(self):
         dat = self.read_packet()
-        return HapticsSTB_RT.Serial2Acc(dat)
+        return hapticsstb_rt.Serial2Acc(dat)
 
     def close(self):
         self.stop()

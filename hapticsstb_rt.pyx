@@ -85,9 +85,9 @@ def to16bit(x):
 	return chr(high)+chr(low)
 
 
-def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
+def PlottingUpdater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
 
-	if inputs['graphing'] == 1:
+	if plot_type == 1:
 
 		plot_objects[0].set_ydata(data[:,0].T)
 		plot_objects[1].set_ydata(data[:,1].T)
@@ -96,7 +96,7 @@ def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim = 2] data, plot_object
 		plot_objects[4].set_ydata(data[:,4].T)
 		plot_objects[5].set_ydata(data[:,5].T)
 
-	if inputs['graphing'] == 2:
+	if plot_type == 2:
 
 		plot_objects[0].set_ydata(data[:,15].T)
 		plot_objects[1].set_ydata(data[:,16].T)
@@ -105,7 +105,7 @@ def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim = 2] data, plot_object
 		plot_objects[4].set_ydata(data[:,19].T)
 		plot_objects[5].set_ydata(data[:,20].T)
 	
-	if inputs['graphing'] == 3:
+	if plot_type == 3:
 
 		plot_objects[0].set_ydata(data[:,6].T)
 		plot_objects[1].set_ydata(data[:,7].T)
@@ -120,7 +120,7 @@ def GraphingUpdater(inputs, np.ndarray[np.float64_t, ndim = 2] data, plot_object
 		plot_objects[8].set_ydata(data[:,14].T)
 
 
-	if inputs['graphing'] == 4:
+	if plot_type == 4:
 
 		if abs(data[-1,2]) > .15:
 			x = -1*data[-1,4]/data[-1,2]

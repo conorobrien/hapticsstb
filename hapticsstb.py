@@ -14,7 +14,7 @@ from cv2.cv import CV_FOURCC
 import hapticsstb_rt
 
 
-# Error for HapticsSTB class
+# Error for STB class
 class EmptyPacketError(Exception):
     pass
 
@@ -43,6 +43,7 @@ class STB:
                 sys.exit()
         else:
             self.device = serial.Serial(kwargs['device'])
+
         self.device.timeout = 0.05
 
         if 'video' in kwargs and kwargs['video']:
@@ -58,10 +59,11 @@ class STB:
             self.record = True
             self.out = VideoWriter(test_path+'.avi',fourcc, 29.970, (720,480))
             self.video_thread = OpenCVThread(self.cap, self.out)
+
         else:
             self.video = False
 
-        # if 'graphing' in kwargs:
+        self.frame = 0
 
         if sample_rate > 3000:
             print 'Sampling Rate too high!'
@@ -82,7 +84,6 @@ class STB:
         self.stop_sampling()
         self.bias_vector = np.mean(bias_hist, axis=0)
 
-
     def start_sampling(self):
         self.device.write('\x01' + self.sample_rate)
         self.packet_old = 300
@@ -95,36 +96,35 @@ class STB:
         self.device.flush()
 
     def read_packet(self):
-        dat = self.device.read(31)
+        pack = self.device.read(31)
 
-        if dat == '' or len(dat) != 31:
+        if pack == '' or len(pack) != 31:
             raise EmptyPacketError
-        self.packet = ord(dat[30])
+        packet_new = ord(pack[30])
         
         if self.packet_old >= 256:
-            self.packet_old = self.packet
-        elif self.packet != (self.packet_old+1)%256:
-            print 'MISSED PACKET', self.packet, self.packet_old
-            self.packet_old = self.packet
-        else:
-            self.packet_old = self.packet
-        return dat
+            self.packet_old = packet_new
+        elif packet_new != (self.packet_old+1)%256:
+            print 'MISSED PACKET', packet_new, self.packet_old
+        
+        self.packet_old = packet_new
+        return pack
 
-    def readData(self):
-        dat = self.read_packet()
-        return hapticsstb_rt.Serial2Data(dat, self.bias_vector)
+    def read_data(self):
+        self.pack = self.read_packet()
+        return hapticsstb_rt.Serial2Data(self.pack, self.bias_vector)
 
-    def readM40(self):
-        dat = self.read_packet()
-        return hapticsstb_rt.Serial2M40(dat, self.bias_vector)
+    def read_M40(self):
+        self.pack = self.read_packet()
+        return hapticsstb_rt.Serial2M40(self.pack, self.bias_vector)
 
-    def readM40V(self):
-        dat = self.read_packet()
-        return hapticsstb_rt.Serial2M40Volts(dat)
+    def read_M40V(self):
+        self.pack = self.read_packet()
+        return hapticsstb_rt.Serial2M40Volts(self.pack)
 
-    def readACC(self):
-        dat = self.read_packet()
-        return hapticsstb_rt.Serial2Acc(dat)
+    def read_ACC(self):
+        self.pack = self.read_packet()
+        return hapticsstb_rt.Serial2Acc(self.pack)
 
     def close(self):
         self.stop()
@@ -236,9 +236,8 @@ def DeviceID(inputs):
     else:
         return (STB, PedalSerial)
 
-def GraphingSetup(inputs):
+def PlottingSetup(inputs, line_length):
 
-    line_length = inputs['line_length']
     pl.ion()
 
     if inputs['graphing'] in [1,2,3]:

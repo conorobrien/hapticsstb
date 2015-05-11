@@ -4,7 +4,7 @@ import hapticsstb
 sample_rate = 3000
 sample_length = sample_rate*5
 
-sensor = hapticsstb.STB(3000)
+sensor = hapticsstb.STB(sample_rate)
 
 sensor_hist = np.zeros((sample_length,15))
 
@@ -13,5 +13,11 @@ print sensor.bias_vector
 
 sensor.start_sampling()
 
-for ii in range(0,sample_length):
-    sensor_hist[ii,0:15] = sensor.readData()
+try:
+    for ii in range(0,sample_length):
+        sensor_hist[ii,0:15] = sensor.readData()
+except KeyboardInterrupt:
+    pass
+
+sensor.stop_sampling()
+sensor.close()

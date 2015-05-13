@@ -20,7 +20,7 @@ M40_transform = np.array(  [[ 0.165175269, 	6.193716635,	-0.05972626,	0.02003320
 
 # [Fx, Fy, Fz, Tx, Ty, Tz] = Serial2FT(data, bias)
 
-def Serial2FT(str x, np.ndarray[np.float64_t, ndim = 1] bias):
+def Serial2M40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	volts = np.zeros((6), dtype = np.float64)
 	cdef int i, j, y
 
@@ -53,7 +53,7 @@ def Serial2Acc(str x):
 
 # Takes serial packet and bias, calls other two functions and returns df
 def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
-	FT = Serial2FT(x, bias)
+	FT = Serial2M40(x, bias)
 	ACC = Serial2Acc(x)
 
 	return np.hstack((FT, ACC))

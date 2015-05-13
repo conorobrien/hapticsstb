@@ -13,7 +13,6 @@ from cv2.cv import CV_FOURCC
 
 import hapticsstb_rt
 
-
 # Error for STB class
 class EmptyPacketError(Exception):
     pass
@@ -38,6 +37,7 @@ class STB:
 
                 if devID == '\x01':
                     self.device = test_device
+                    break
             else:
                 print 'STB not found! Check all cables!'
                 sys.exit()
@@ -76,10 +76,10 @@ class STB:
         self.bias_vector = np.zeros(6,dtype=np.float64)
 
     def bias(self):
-        bias_hist = np.zeros((6,500))
+        bias_hist = np.zeros((500,6))
         self.start_sampling()
         for ii in range(0, 500):
-            bias_hist[:,ii] = self.readM40V()
+            bias_hist[ii,:] = self.read_M40V()
 
         self.stop_sampling()
         self.bias_vector = np.mean(bias_hist, axis=0)
@@ -108,6 +108,7 @@ class STB:
             print 'MISSED PACKET', packet_new, self.packet_old
         
         self.packet_old = packet_new
+        self.pack = pack
         return pack
 
     def read_data(self):
@@ -118,16 +119,25 @@ class STB:
         self.pack = self.read_packet()
         return hapticsstb_rt.Serial2M40(self.pack, self.bias_vector)
 
+    def get_M40(self):
+        return hapticsstb_rt.Serial2M40(self.pack, self.bias_vector)
+
     def read_M40V(self):
         self.pack = self.read_packet()
+        return hapticsstb_rt.Serial2M40Volts(self.pack)
+
+    def get_M40V(self):
         return hapticsstb_rt.Serial2M40Volts(self.pack)
 
     def read_ACC(self):
         self.pack = self.read_packet()
         return hapticsstb_rt.Serial2Acc(self.pack)
 
+    def get_ACC(self):
+        return hapticsstb_rt.Serial2Acc(self.pack)
+
     def close(self):
-        self.stop()
+        self.stop_sampling()
         self.device.close()
 
 # Used by HapticsSTB class to access pedal
@@ -236,16 +246,34 @@ def DeviceID(inputs):
     else:
         return (STB, PedalSerial)
 
-def PlottingSetup(inputs, line_length):
+class Plot:
+    def __init__(self, plot_type, line_length):
+        self.plot_objects = PlottingSetup(plot_type, line_length)
+        self.plot_type = plot_type
+        self.frame = 1
+
+        self.data = np.ones((line_length, 15))
+
+    def Update(self, new_data):
+        self.data = np.roll(self.data,1,axis=0)
+        self.data[0,0:] = new_data
+        if self.frame % 50:
+            hapticsstb_rt.PlottingUpdater(self.plot_type, self.data, self.plot_objects)
+            self.frame = 1
+        else:
+            self.frame += 1
+
+
+def PlottingSetup(plot_type, line_length):
 
     pl.ion()
 
-    if inputs['graphing'] in [1,2,3]:
+    if plot_type in [1,2,3]:
         start_time = -1*(line_length-1)/500.0
         times = np.linspace(start_time, 0, line_length)
 
     # Force/Torque Graphing
-    if inputs['graphing'] == 1:
+    if plot_type == 1:
 
         f, (axF, axT) =pl.subplots(2,1, sharex=True)
 
@@ -269,7 +297,7 @@ def PlottingSetup(inputs, line_length):
         pl.draw()
 
     # Mini40 Voltage Graphing
-    elif inputs['graphing'] == 2:
+    elif plot_type == 2:
 
         pl.axis([start_time, 0,-2,2])
         pl.grid()
@@ -288,7 +316,7 @@ def PlottingSetup(inputs, line_length):
         pl.draw()
 
     #Accelerometer Voltage Graphing
-    elif inputs['graphing'] == 3:
+    elif plot_type == 3:
 
         f, (ax1, ax2, ax3) =pl.subplots(3,1, sharex=True)
 
@@ -313,7 +341,7 @@ def PlottingSetup(inputs, line_length):
         pl.draw()
 
     # 2D Position Plotting
-    elif inputs['graphing'] == 4:
+    elif plot_type == 4:
 
         pl.axis([-.075, .075, -.075, .075])
         pl.grid()

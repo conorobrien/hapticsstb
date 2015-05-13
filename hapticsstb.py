@@ -13,6 +13,12 @@ from cv2.cv import CV_FOURCC
 
 import hapticsstb_rt
 
+# Constants for plotting
+PLOT_FT = 1
+PLOT_M40V = 2
+PLOT_ACC = 3
+PLOT_POS = 4
+
 # Error for STB class
 class EmptyPacketError(Exception):
     pass
@@ -46,7 +52,10 @@ class STB:
         else:
             self.device = serial.Serial(kwargs['device'])
 
-        self.device.timeout = 0.05
+        if sample_rate > 100:
+            self.device.timeout = 0.05
+        else:
+            self.device.timeout = 0.5
 
         if 'video' in kwargs and kwargs['video']:
             self.video = True
@@ -71,23 +80,26 @@ class STB:
             print 'Sampling Rate too high!'
             raise ValueError
 
-        high = (sample_rate&int('0xFF00', 16))>>8
-        low = sample_rate&int('0x00FF', 16)
-        self.sample_rate = chr(high)+chr(low)
-
+        self.update_rate(sample_rate)
         self.bias_vector = np.zeros(6,dtype=np.float64)
 
+    def update_rate(self,sample_rate):
+        self.sample_rate = sample_rate
+        high = (sample_rate&int('0xFF00', 16))>>8
+        low = sample_rate&int('0x00FF', 16)
+        self.sample_rate_bytes = chr(high)+chr(low)
+
     def bias(self):
-        bias_hist = np.zeros((500,6))
+        bias_hist = np.zeros((self.sample_rate/5,6))
         self.start_sampling()
-        for ii in range(0, 500):
+        for ii in range(0, self.sample_rate/5):
             bias_hist[ii,:] = self.read_M40V()
 
         self.stop_sampling()
         self.bias_vector = np.mean(bias_hist, axis=0)
 
     def start_sampling(self):
-        self.device.write('\x01' + self.sample_rate)
+        self.device.write('\x01' + self.sample_rate_bytes)
         self.packet_old = 300
 
         if self.video:
@@ -96,6 +108,9 @@ class STB:
     def stop_sampling(self):
         self.device.write('\x02')
         self.device.flush()
+
+        if self.video:
+            self.video_thread.stop.set()
 
     def read_packet(self):
         pack = self.device.read(31)
@@ -137,6 +152,37 @@ class STB:
 
     def get_ACC(self):
         return hapticsstb_rt.Serial2Acc(self.pack)
+
+    def plot_init(self, plot_type, plot_length):
+        self.update_rate(500)
+        self.line_length = self.sample_rate*plot_length
+        self.plot_objects = PlottingSetup(plot_type, self.line_length)
+        self.plot_type = plot_type
+        self.frame = 1
+
+        if self.plot_type in [PLOT_FT, PLOT_M40V, PLOT_POS]:
+            self.plot_data = np.zeros((self.line_length, 6))
+        elif self.plot_type == PLOT_ACC:
+            self.plot_data = np.zeros((self.line_length, 9))
+        else:
+            print "Unrecognized plotting type!"
+            sys.exit
+
+    def plot_update(self):
+        if self.plot_type in [PLOT_FT, PLOT_POS]:
+            new_data = self.get_M40()
+        elif self.plot_type == PLOT_M40V:
+            new_data = self.get_M40V()
+        elif self.plot_type == PLOT_ACC:
+            new_data = self.get_ACC()
+
+        self.plot_data = np.roll(self.plot_data,-1,axis=0)
+        self.plot_data[self.line_length-1,0:] = new_data
+        if self.frame % 50 == 0:
+            hapticsstb_rt.PlottingUpdater(self.plot_type, self.plot_data, self.plot_objects)
+            self.frame = 1
+        else:
+            self.frame += 1
 
     def close(self):
         self.stop_sampling()
@@ -249,17 +295,18 @@ def DeviceID(inputs):
         return (STB, PedalSerial)
 
 class Plot:
-    def __init__(self, plot_type, line_length):
-        self.plot_objects = PlottingSetup(plot_type, line_length)
+    def __init__(self, plot_type, plot_length):
+        self.line_length = 500*plot_length
+        self.plot_objects = PlottingSetup(plot_type, self.line_length)
         self.plot_type = plot_type
         self.frame = 1
 
-        self.data = np.ones((line_length, 15))
+        self.data = np.ones((self.line_length, 15))
 
     def Update(self, new_data):
-        self.data = np.roll(self.data,1,axis=0)
-        self.data[0,0:] = new_data
-        if self.frame % 50:
+        self.data = np.roll(self.data,-1,axis=0)
+        self.data[self.line_length-1,0:] = new_data
+        if self.frame % 50 == 0:
             hapticsstb_rt.PlottingUpdater(self.plot_type, self.data, self.plot_objects)
             self.frame = 1
         else:
@@ -270,12 +317,12 @@ def PlottingSetup(plot_type, line_length):
 
     pl.ion()
 
-    if plot_type in [1,2,3]:
+    if plot_type in [PLOT_FT,PLOT_M40V,PLOT_ACC]:
         start_time = -1*(line_length-1)/500.0
         times = np.linspace(start_time, 0, line_length)
 
     # Force/Torque Graphing
-    if plot_type == 1:
+    if plot_type == PLOT_FT:
 
         f, (axF, axT) =pl.subplots(2,1, sharex=True)
 
@@ -299,7 +346,7 @@ def PlottingSetup(plot_type, line_length):
         pl.draw()
 
     # Mini40 Voltage Graphing
-    elif plot_type == 2:
+    elif plot_type == PLOT_M40V:
 
         pl.axis([start_time, 0,-2,2])
         pl.grid()
@@ -318,13 +365,13 @@ def PlottingSetup(plot_type, line_length):
         pl.draw()
 
     #Accelerometer Voltage Graphing
-    elif plot_type == 3:
+    elif plot_type == PLOT_ACC:
 
         f, (ax1, ax2, ax3) =pl.subplots(3,1, sharex=True)
 
-        ax1.axis([start_time, 0,-.1,3.4])
-        ax2.axis([start_time, 0,-.1,3.4])
-        ax3.axis([start_time, 0,-.1,3.4])
+        ax1.axis([start_time, 0,-7,7])
+        ax2.axis([start_time, 0,-7,7])
+        ax3.axis([start_time, 0,-7,7])
         ax1.grid()
         ax2.grid()
         ax3.grid()

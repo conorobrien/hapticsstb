@@ -5,6 +5,12 @@ cimport numpy as np
 import pylab as pl
 import pdb
 
+# Constants for plotting
+PLOT_FT = 1
+PLOT_M40V = 2
+PLOT_ACC = 3
+PLOT_POS = 4
+
 # Calibrated linear transform for out Mini40, from channel voltages to forces
 # and torques
 
@@ -87,7 +93,7 @@ def to16bit(x):
 
 def PlottingUpdater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
 
-	if plot_type == 1:
+	if plot_type == PLOT_FT:
 
 		plot_objects[0].set_ydata(data[:,0].T)
 		plot_objects[1].set_ydata(data[:,1].T)
@@ -96,31 +102,31 @@ def PlottingUpdater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_obj
 		plot_objects[4].set_ydata(data[:,4].T)
 		plot_objects[5].set_ydata(data[:,5].T)
 
-	if plot_type == 2:
+	if plot_type == PLOT_M40V:
 
-		plot_objects[0].set_ydata(data[:,15].T)
-		plot_objects[1].set_ydata(data[:,16].T)
-		plot_objects[2].set_ydata(data[:,17].T)
-		plot_objects[3].set_ydata(data[:,18].T)
-		plot_objects[4].set_ydata(data[:,19].T)
-		plot_objects[5].set_ydata(data[:,20].T)
+		plot_objects[0].set_ydata(data[:,0].T)
+		plot_objects[1].set_ydata(data[:,1].T)
+		plot_objects[2].set_ydata(data[:,2].T)
+		plot_objects[3].set_ydata(data[:,3].T)
+		plot_objects[4].set_ydata(data[:,4].T)
+		plot_objects[5].set_ydata(data[:,5].T)
 	
-	if plot_type == 3:
+	if plot_type == PLOT_ACC:
 
-		plot_objects[0].set_ydata(data[:,6].T)
-		plot_objects[1].set_ydata(data[:,7].T)
-		plot_objects[2].set_ydata(data[:,8].T)		
+		plot_objects[0].set_ydata(data[:,0].T)
+		plot_objects[1].set_ydata(data[:,1].T)
+		plot_objects[2].set_ydata(data[:,2].T)		
 
-		plot_objects[3].set_ydata(data[:,9].T)
-		plot_objects[4].set_ydata(data[:,10].T)
-		plot_objects[5].set_ydata(data[:,11].T)		
+		plot_objects[3].set_ydata(data[:,3].T)
+		plot_objects[4].set_ydata(data[:,4].T)
+		plot_objects[5].set_ydata(data[:,5].T)		
 
-		plot_objects[6].set_ydata(data[:,12].T)
-		plot_objects[7].set_ydata(data[:,13].T)
-		plot_objects[8].set_ydata(data[:,14].T)
+		plot_objects[6].set_ydata(data[:,6].T)
+		plot_objects[7].set_ydata(data[:,7].T)
+		plot_objects[8].set_ydata(data[:,8].T)
 
 
-	if plot_type == 4:
+	if plot_type == PLOT_POS:
 
 		if abs(data[-1,2]) > .15:
 			x = -1*data[-1,4]/data[-1,2]

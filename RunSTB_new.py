@@ -2,15 +2,15 @@
 import numpy as np
 import hapticsstb
 
-plot_type = 1
+plot_type = hapticsstb.PLOT_POS
 
 sample_rate = 500
-sample_length = sample_rate*5
+sample_length = sample_rate*30
 
 sensor = hapticsstb.STB(sample_rate)
 
 if plot_type:
-    plot = hapticsstb.Plot(plot_type, sample_rate*5)
+    sensor.plot_init(plot_type, 5)
 
 sensor_hist = np.zeros((sample_length,15))
 
@@ -21,13 +21,17 @@ sensor.start_sampling()
 
 try:
     for ii in range(0,sample_length):
-        # sensor_hist[ii,0:15] = sensor.read_data()
-        print sensor.read_M40()
+        sensor_hist[ii,0:15] = sensor.read_data()
         if plot_type:
-            plot.Update(sensor_hist[ii,0:15])
+            sensor.plot_update()
 
 except KeyboardInterrupt:
     pass
+
+except:
+	sensor.close()
+	raise
+
 
 sensor.stop_sampling()
 sensor.close()

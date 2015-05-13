@@ -23,8 +23,10 @@ class STB:
         if 'device' not in kwargs or kwargs['device'] == '':
             if sys.platform == 'darwin':
                 devices = glob.glob('/dev/tty.usbmodem*')
-            elif sys.platform == 'linux':
+            elif sys.platform == 'linux2':
                 devices = glob.glob('/dev/ttyACM*')
+            else:
+                print "Unrecognized Platform!"
 
             for dev in devices:
                 test_device = serial.Serial(dev, timeout=0.1)

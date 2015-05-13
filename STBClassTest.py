@@ -113,7 +113,7 @@ def DeviceID(inputs):
 
 	devices = glob.glob('/dev/ttyACM*')
 
-	if len(devices) < 2:
+	if inputs['pedal'] and len(devices) < 2:
 		print 'NOT ENOUGH DEVICES CONNECTED, EXITING...'
 		sys.exit()
 

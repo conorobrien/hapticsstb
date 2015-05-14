@@ -2,7 +2,7 @@
 import numpy as np
 import hapticsstb
 
-plot_type = hapticsstb.PLOT_POS
+plot_type = hapticsstb.PLOT_FT
 
 sample_rate = 500
 sample_length = sample_rate*30

@@ -1,11 +1,12 @@
 # cython: profile=True
 
+# These functions are time-sensitive functions for hapticsstb.py, you shouldn't have to call any of them directly
+
 import numpy as np
 cimport numpy as np
 import pylab as pl
-import pdb
 
-# Constants for plotting
+# Constants for plot types
 PLOT_FT = 1
 PLOT_M40V = 2
 PLOT_ACC = 3
@@ -23,8 +24,7 @@ M40_transform = np.array(  [[ 0.165175269, 	6.193716635,	-0.05972626,	0.02003320
 
 # Takes in a serial packet and 6-element bias vector, outputs a 6-element
 # vector with forces and torques
-
-# [Fx, Fy, Fz, Tx, Ty, Tz] = Serial2FT(data, bias)
+# [Fx, Fy, Fz, Tx, Ty, Tz] = Serial2FT(packet, bias)
 
 def Serial2M40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	volts = np.zeros((6), dtype = np.float64)
@@ -40,9 +40,9 @@ def Serial2M40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 
 	return np.dot(M40_transform, (volts - bias).T)
 
-# Takes serial packet, returns accelerometer voltages
 
-# [Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Acc(data)
+# Takes serial packet, returns accelerometer voltages
+# [Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Acc(packet)
 
 def Serial2Acc(str x):
 	gees = np.zeros((9), dtype = np.float64)
@@ -57,7 +57,8 @@ def Serial2Acc(str x):
 
 	return gees
 
-# Takes serial packet and bias, calls other two functions and returns df
+# Takes serial packet and bias, calls other two functions and returns both
+# [Fx, Fy, Fz, Tx, Ty, Tz, Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Data(packet, bias)
 def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	FT = Serial2M40(x, bias)
 	ACC = Serial2Acc(x)
@@ -65,7 +66,7 @@ def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	return np.hstack((FT, ACC))
 
 # Takes serial packet, returns Mini40 Voltages
-# [C0, C1, C2, C3, C4, C5] = Serial2M40Volts(data)
+# [V0, V1, V2, V3, V4, V5] = Serial2M40Volts(data)
 
 def Serial2M40Volts(str x):
 	cdef int i, j, y
@@ -73,7 +74,7 @@ def Serial2M40Volts(str x):
 	for i in range(0,6):
 		j = i*2
 		y = (ord(x[j])<<8) + (ord(x[j+1]))
-		if y > 2048:
+		if y > 2048: # This handles the twos complement negatives
 			volts[5-i] = <float>(y - 4096)*0.002
 		else:
 			volts[5-i] = <float>y*0.002
@@ -90,7 +91,7 @@ def to16bit(x):
 
 	return chr(high)+chr(low)
 
-
+# Updates plots, called by STB.plot_update()
 def PlottingUpdater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
 
 	if plot_type == PLOT_FT:

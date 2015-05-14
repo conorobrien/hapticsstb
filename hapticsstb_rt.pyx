@@ -26,7 +26,7 @@ M40_transform = np.array(  [[ 0.165175269, 	6.193716635,	-0.05972626,	0.02003320
 # vector with forces and torques
 # [Fx, Fy, Fz, Tx, Ty, Tz] = Serial2FT(packet, bias)
 
-def Serial2M40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
+def serial_m40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	volts = np.zeros((6), dtype = np.float64)
 	cdef int i, j, y
 
@@ -44,7 +44,7 @@ def Serial2M40(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 # Takes serial packet, returns accelerometer voltages
 # [Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Acc(packet)
 
-def Serial2Acc(str x):
+def serial_acc(str x):
 	gees = np.zeros((9), dtype = np.float64)
 	acc_order = [0,1,2,5,3,4,8,6,7] #Puts acc channels in x,y,z order
 
@@ -59,7 +59,7 @@ def Serial2Acc(str x):
 
 # Takes serial packet and bias, calls other two functions and returns both
 # [Fx, Fy, Fz, Tx, Ty, Tz, Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Data(packet, bias)
-def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
+def serial_data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 	FT = Serial2M40(x, bias)
 	ACC = Serial2Acc(x)
 
@@ -68,7 +68,7 @@ def Serial2Data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
 # Takes serial packet, returns Mini40 Voltages
 # [V0, V1, V2, V3, V4, V5] = Serial2M40Volts(data)
 
-def Serial2M40Volts(str x):
+def serial_m40v(str x):
 	cdef int i, j, y
 	volts = np.zeros((6), dtype = np.float64)
 	for i in range(0,6):
@@ -92,7 +92,7 @@ def to16bit(x):
 	return chr(high)+chr(low)
 
 # Updates plots, called by STB.plot_update()
-def PlottingUpdater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
+def plotting_updater(plot_type, np.ndarray[np.float64_t, ndim = 2] data, plot_objects):
 
 	if plot_type == PLOT_FT:
 

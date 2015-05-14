@@ -136,28 +136,28 @@ class STB(object):
 
     def read_data(self):
         self.pack = self.read_packet()
-        return hapticsstb_rt.Serial2Data(self.pack, self.bias_vector)
+        return hapticsstb_rt.serial_data(self.pack, self.bias_vector)
 
     def read_m40(self):
         self.pack = self.read_packet()
-        return hapticsstb_rt.Serial2M40(self.pack, self.bias_vector)
+        return hapticsstb_rt.serial_m40(self.pack, self.bias_vector)
 
     def get_m40(self):
-        return hapticsstb_rt.Serial2M40(self.pack, self.bias_vector)
+        return hapticsstb_rt.serial_m40(self.pack, self.bias_vector)
 
     def read_m40v(self):
         self.pack = self.read_packet()
-        return hapticsstb_rt.Serial2M40Volts(self.pack)
+        return hapticsstb_rt.serial_m40v(self.pack)
 
     def get_m40v(self):
-        return hapticsstb_rt.Serial2M40Volts(self.pack)
+        return hapticsstb_rt.serial_m40v(self.pack)
 
     def read_acc(self):
         self.pack = self.read_packet()
-        return hapticsstb_rt.Serial2Acc(self.pack)
+        return hapticsstb_rt.serial_acc(self.pack)
 
     def get_acc(self):
-        return hapticsstb_rt.Serial2Acc(self.pack)
+        return hapticsstb_rt.serial_acc(self.pack)
 
     def plot_init(self, plot_type, plot_length):
         self.update_rate(500)
@@ -185,7 +185,7 @@ class STB(object):
         self.plot_data = np.roll(self.plot_data, -1, axis=0)
         self.plot_data[-1, 0:] = new_data
         if self.frame % 50 == 0:
-            hapticsstb_rt.PlottingUpdater(self.plot_type, self.plot_data, self.plot_objects)
+            hapticsstb_rt.plotting_updater(self.plot_type, self.plot_data, self.plot_objects)
             self.frame = 1
         else:
             self.frame += 1
@@ -193,28 +193,6 @@ class STB(object):
     def close(self):
         self.stop_sampling()
         self.device.close()
-
-        if self.video:
-            self.video_thread.stop.set()
-
-class Plot(object):
-    def __init__(self, plot_type, plot_length):
-        self.line_length = 500*plot_length
-        self.plot_objects = plotting_setup(plot_type, self.line_length)
-        self.plot_type = plot_type
-        self.frame = 1
-
-        self.data = np.ones((self.line_length, 15))
-
-    def update(self, new_data):
-        self.data = np.roll(self.data, -1, axis=0)
-        self.data[self.line_length-1, 0:] = new_data
-        if self.frame % 50 == 0:
-            hapticsstb_rt.PlottingUpdater(self.plot_type, self.data, self.plot_objects)
-            self.frame = 1
-        else:
-            self.frame += 1
-
 
 class OpenCVThread(threading.Thread):
     def __init__(self, cap, out):

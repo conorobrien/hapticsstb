@@ -21,7 +21,7 @@ sensor.start_sampling()
 
 try:
     for ii in range(0,sample_length):
-        sensor_hist[ii,0:15] = sensor.read_data()
+        sensor_hist[ii, 0:15] = sensor.read_data()
         if plot_type:
             sensor.plot_update()
 

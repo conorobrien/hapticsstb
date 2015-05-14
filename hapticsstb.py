@@ -80,7 +80,9 @@ class STB(object):
             raise ValueError
 
         self.update_rate(sample_rate)
-        self.bias_vector = np.zeros(6, dtype=np.float64)
+
+        # Default bias vector is about the empty weight, hasn't been tested for drift
+        self.bias_vector = np.array([0.200, 0.0922, 0.0845, -0.123, 0.487, -0.0948], dtype=np.float64)
         self.frame = 0
         self.packet_old = 300
         self.pack = '\00'*31
@@ -99,7 +101,7 @@ class STB(object):
         bias_hist = np.zeros((self.sample_rate/5, 6))
         self.start_sampling()
         for ii in range(0, self.sample_rate/5):
-            bias_hist[ii, :] = self.read_M40V()
+            bias_hist[ii, :] = self.read_m40v()
 
         self.stop_sampling()
         self.bias_vector = np.mean(bias_hist, axis=0)
@@ -162,7 +164,7 @@ class STB(object):
     def plot_init(self, plot_type, plot_length):
         self.update_rate(500)
         line_length = self.sample_rate*plot_length
-        self.plot_objects = plotting_setup(plot_type, self.line_length)
+        self.plot_objects = plotting_setup(plot_type, line_length)
         self.plot_type = plot_type
         self.frame = 1
 
@@ -176,11 +178,11 @@ class STB(object):
 
     def plot_update(self):
         if self.plot_type in [PLOT_FT, PLOT_POS]:
-            new_data = self.get_M40()
+            new_data = self.get_m40()
         elif self.plot_type == PLOT_M40V:
-            new_data = self.get_M40V()
+            new_data = self.get_m40v()
         elif self.plot_type == PLOT_ACC:
-            new_data = self.get_ACC()
+            new_data = self.get_acc()
 
         self.plot_data = np.roll(self.plot_data, -1, axis=0)
         self.plot_data[-1, 0:] = new_data
@@ -218,11 +220,11 @@ def plotting_setup(plot_type, line_length):
     # Force/Torque Graphing
     if plot_type == PLOT_FT:
 
-        (axF, axT) = pl.subplots(2, 1, sharex=True)
+        f, (axF, axT) = pl.subplots(2, 1, sharex=True)
 
-        axF.axis([start_time, 0, -5, 5])
+        axF.axis([start_time, 0, -20, 20])
         axF.grid()
-        axT.axis([start_time, 0, -.5, .5])
+        axT.axis([start_time, 0, -1, 1])
         axT.grid()
 
         fx_line, = axF.plot(times, [0] * line_length, color='r')
@@ -232,8 +234,8 @@ def plotting_setup(plot_type, line_length):
         ty_line, = axT.plot(times, [0] * line_length, color='m')
         tz_line, = axT.plot(times, [0] * line_length, color='y')
 
-        axF.legend([fx_line, fy_line, fz_line], ['FX', 'FY', 'FZ'])
-        axT.legend([tx_line, ty_line, tz_line], ['TX', 'TY', 'TZ'])
+        axF.legend([fx_line, fy_line, fz_line], ['FX', 'FY', 'FZ'], loc=2)
+        axT.legend([tx_line, ty_line, tz_line], ['TX', 'TY', 'TZ'], loc=2)
 
         plot_objects = (fx_line, fy_line, fz_line, tx_line, ty_line, tz_line)
 
@@ -242,7 +244,7 @@ def plotting_setup(plot_type, line_length):
     # Mini40 Voltage Graphing
     elif plot_type == PLOT_M40V:
 
-        pl.axis([start_time, 0, -2, 2])
+        pl.axis([start_time, 0, -5, 5])
         pl.grid()
 
         c0_line, = pl.plot(times, [0] * line_length, color='brown')

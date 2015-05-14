@@ -60,8 +60,8 @@ def serial_acc(str x):
 # Takes serial packet and bias, calls other two functions and returns both
 # [Fx, Fy, Fz, Tx, Ty, Tz, Acc1X, Acc1Y, Acc1Z, Acc2X, Acc2Y, Acc2Z, Acc3X, Acc3Y, Acc3Z] = Serial2Data(packet, bias)
 def serial_data(str x, np.ndarray[np.float64_t, ndim = 1] bias):
-	FT = Serial2M40(x, bias)
-	ACC = Serial2Acc(x)
+	FT = serial_m40(x, bias)
+	ACC = serial_acc(x)
 
 	return np.hstack((FT, ACC))
 

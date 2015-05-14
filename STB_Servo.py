@@ -6,50 +6,60 @@
 
 # Phidget Python API reference: http://www.phidgets.com/documentation/web/PythonDoc/Phidgets.html
 
+import pdb
+import time
+
 import numpy as np
 import hapticsstb
 
 from Phidgets.PhidgetException import PhidgetErrorCodes, PhidgetException
-from Phidgets.Events.Events import AttachEventArgs, DetachEventArgs, ErrorEventArgs, CurrentChangeEventArgs, PositionChangeEventArgs, VelocityChangeEventArgs
 from Phidgets.Devices.AdvancedServo import AdvancedServo
-from Phidgets.Devices.Servo import ServoTypes
+
+def Error(e):
+    try:
+        source = e.device
+        print("Phidget Error %i: %s" % (source.getSerialNum(), e.eCode, e.description))
+    except PhidgetException as e:
+        print("Phidget Exception %i: %s" % (e.code, e.details))
 
 # Setup Phidget
-try:
-    servo = AdvancedServo()
-except RuntimeError as e:
-  print("Runtime Error: %s" % e.message)
+servo = AdvancedServo()
+servo.setOnErrorhandler(Error)
 
 # Open Phidget
-try:
 servo.openPhidget()
-except PhidgetException as e:
-  print (“Phidget Exception %i: %s” % (e.code, e.detail))       
-  exit(1)
+servo.waitForAttach(500)
 
 # Set Phidget servo parameters
-motor = 0
-servo.setEngaged(motor, True)
-servo_min = servo.getPositionMin(motor)
-servo_max = servo.getPositionMax(motor)
-servo_mid = (servo_max - servo_min)/2
-servo.setAcceleration(motor, 1000) # I just picked these to be smooth, feel free to change
-servo.setVelocityLimit(motor, 1000)
+try:
+	motor = 0
+	servo.setEngaged(0, True)
+	servo_min = servo.getPositionMin(motor) + 5
+	servo_max = servo.getPositionMax(motor) - 5
+	servo_mid = (servo_max - servo_min)/2
+	servo.setAcceleration(motor, 500) # I just picked these to be smooth, feel free to change
+	servo.setVelocityLimit(motor, 2000)
+except PhidgetException as e:
+    print("Phidget Exception %i: %s" % (e.code, e.details))
+    print("Exiting....")
+    exit(1)
 
 # Set up STB
-sample_rate = 10 # This works best with a sampling rate of below 25 Hz
-sample_length = sample_rate*30
+sample_rate = 25 # This works best with low sampling rates
 
 sensor = hapticsstb.STB(sample_rate)
 
 sensor.bias() # Tares the sensor, make sure that nothing's touching the board
 print sensor.bias_vector
 
+run_time = 30
+
+start_time = time.time()
 sensor.start_sampling() # Starts the STB hardware sampling loop
 try:
-    for ii in range(0,sample_length):
+   while time.time() - start_time <= run_time:
         # read_M40 returns [Fx, Fy, Fz, Tx, Ty, Tz]
-		sensor_data = sensor.read_M40()
+		sensor_data = sensor.read_m40()
 
         # Scale force to +- 30N for whole range of servo
 		pos = servo_mid + (sensor_data[2])*(servo_max - servo_mid)/30
@@ -62,6 +72,11 @@ try:
 
 except KeyboardInterrupt:
     pass
+
+except PhidgetException as e:
+    print("Phidget Exception %i: %s" % (e.code, e.details))
+    print("Exiting....")
+    exit(1)
 
 except:
 	sensor.close() # Need to run this when you're done, stops STB and closes serial port

@@ -26,39 +26,28 @@ class EmptyPacketError(Exception):
 # Class for the Haptics STB. Manages initialization, stop, start and reading raw serial packets
 class STB(object):
 
-    def __init__(self, sample_rate, device='', video=''):
+    def __init__(self, sample_rate, STB='', pedal=False, video=''):
 
-        if device == '':
-            if sys.platform == 'darwin':
-                devices = glob.glob('/dev/tty.usbmodem*')
-            elif sys.platform == 'linux2':
-                devices = glob.glob('/dev/ttyACM*')
-            else:
-                print "Unrecognized Platform!"
-
-            for dev in devices:
-                test_device = serial.Serial(dev, timeout=0.1)
-                test_device.write('\x02')
-                time.sleep(0.05)
-                test_device.flushInput()
-                test_device.write('\x03')
-
-                dev_id = test_device.read(200)[-1]
-
-                if dev_id == '\x01':
-                    self.device = test_device
-                    break
-            else:
-                print 'STB not found! Check all cables!'
-                sys.exit()
+        # STB init
+        if STB == '':
+            self.STB_dev = find_device('\x01')
         else:
-            self.device = serial.Serial(device)
+            self.STB_dev = serial.Serial(STB)
 
         if sample_rate > 100:
-            self.device.timeout = 0.05
+            self.STB_dev.timeout = 0.05
         else:
-            self.device.timeout = 0.5
+            self.STB_dev.timeout = 0.5
 
+        # Pedal Init
+        if pedal:
+            self._pedal = True
+            self.pedal_dev = find_device('\x02')
+            self.pedal_dev.timeout = 0
+        else:
+            self._pedal = False
+
+        # Video Init
         if video:
             self.video = True
             err = subprocess.call(['v4l2-ctl', '-i 4'])
@@ -81,7 +70,7 @@ class STB(object):
 
         self.update_rate(sample_rate)
 
-        # Default bias vector is about the empty weight, hasn't been tested for drift
+        # Default bias vector is close to the empty weight, hasn't been tested for drift
         self.bias_vector = np.array([0.200, 0.0922, 0.0845, -0.123, 0.487, -0.0948], dtype=np.float64)
         self.frame = 0
         self.packet_old = 300
@@ -105,23 +94,24 @@ class STB(object):
 
         self.stop_sampling()
         self.bias_vector = np.mean(bias_hist, axis=0)
+        self.packet_old = 300
 
     def start_sampling(self):
-        self.device.write('\x01' + self.sample_rate_bytes)
+        self.STB_dev.write('\x01' + self.sample_rate_bytes)
         self.packet_old = 300
 
         if self.video:
             self.video_thread.start()
 
     def stop_sampling(self):
-        self.device.write('\x02')
-        self.device.flush()
+        self.STB_dev.write('\x02')
+        self.STB_dev.flush()
 
         if self.video:
             self.video_thread.stop.set()
 
     def read_packet(self):
-        pack = self.device.read(31)
+        pack = self.STB_dev.read(31)
 
         if pack == '' or len(pack) != 31:
             raise EmptyPacketError
@@ -191,10 +181,19 @@ class STB(object):
             self.frame = 1
         else:
             self.frame += 1
+    def pedal(self):
+        if not self._pedal:
+            return 0
+        else:
+            state = self.pedal_dev.read(1)
+            if state == '':
+                return 0
+            else:
+                return ord(state)
 
     def close(self):
         self.stop_sampling()
-        self.device.close()
+        self.STB_dev.close()
 
 class OpenCVThread(threading.Thread):
     def __init__(self, cap, out):
@@ -303,3 +302,33 @@ def plotting_setup(plot_type, line_length):
         return 0
 
     return plot_objects
+
+def find_device(target_id):
+    if sys.platform == 'darwin':
+        devices = glob.glob('/dev/tty.usbmodem*')
+    elif sys.platform == 'linux2':
+        devices = glob.glob('/dev/ttyACM*')
+    else:
+        print "Unrecognized Platform!"
+        sys.exit()
+
+    for dev in devices:
+        try:
+            test_device = serial.Serial(dev, timeout=0.1)
+        except:
+            continue
+
+        test_device.write('\x02')
+        time.sleep(0.05)
+        test_device.flushInput()
+        test_device.write('\x03')
+
+        dev_id = test_device.read(200)[-1]
+
+        if dev_id == target_id:
+            return test_device
+        else:
+            test_device.close()
+    else:
+        print 'Device ' + hex(ord(target_id)) + ' not found! Check all cables!'
+        sys.exit()

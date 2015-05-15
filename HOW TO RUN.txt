@@ -1,5 +1,7 @@
-1: Open Terminator (bottom of screen)
-2: run "RunSTB -subject x -task y" with appropriate task and subject numbers
+USE LEGACY BRANCH FOR DATA COLLECTION, THIS CODE IS BETTER, BUT A BIT DIFFERENT
+
+1: Open terminal (ctrl-alt-T or right click in Nautilus and choose "Open in Terminal")
+2: Type "./RunSTB -s y -t y" with appropriate task and subject numbers
 3: End task using ctrl-c
 
 COMMON ERRORS

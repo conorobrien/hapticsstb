@@ -13,8 +13,6 @@ sudo pip install pyserial cython
 # unzip opencv-2.4.9.zip
 # rm opencv-2.4.9.zip
 
-# if this works, also compile ffmpeg from source
-
 echo -n "Username for serial and video access: "
 read username
 

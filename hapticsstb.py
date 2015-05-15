@@ -19,6 +19,15 @@ PLOT_M40V = 2
 PLOT_ACC = 3
 PLOT_POS = 4
 
+# Serial Commands
+START = '\x01'
+STOP = '\x02'
+ID = '\x03'
+
+# STB and Pedal IDs
+STB_ID = '\x01'
+PEDAL_ID = '\x02'
+
 # Error for STB class
 class EmptyPacketError(Exception):
     pass
@@ -30,7 +39,7 @@ class STB(object):
 
         # STB init
         if STB == '':
-            self.STB_dev = find_device('\x01')
+            self.STB_dev = find_device(STB_ID)
         else:
             self.STB_dev = serial.Serial(STB)
 
@@ -42,7 +51,7 @@ class STB(object):
         # Pedal Init
         if pedal:
             self._pedal = True
-            self.pedal_dev = find_device('\x02')
+            self.pedal_dev = find_device(PEDAL_ID)
             self.pedal_dev.timeout = 0
         else:
             self._pedal = False
@@ -97,14 +106,14 @@ class STB(object):
         self.packet_old = 300
 
     def start_sampling(self):
-        self.STB_dev.write('\x01' + self.sample_rate_bytes)
+        self.STB_dev.write(START + self.sample_rate_bytes)
         self.packet_old = 300
 
         if self.video:
             self.video_thread.start()
 
     def stop_sampling(self):
-        self.STB_dev.write('\x02')
+        self.STB_dev.write(STOP)
         self.STB_dev.flush()
 
         if self.video:
@@ -318,10 +327,10 @@ def find_device(target_id):
         except:
             continue
 
-        test_device.write('\x02')
+        test_device.write(STOP)
         time.sleep(0.05)
         test_device.flushInput()
-        test_device.write('\x03')
+        test_device.write(ID)
 
         dev_id = test_device.read(200)[-1]
 

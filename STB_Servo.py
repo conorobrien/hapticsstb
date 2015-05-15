@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 ## BEFORE RUNNING ON NEW COMPUTER
 # Install Phidget Libraries: http://www.phidgets.com/docs/OS_-_Linux#Getting_Started_with_Linux
 # Install Phidget Python libraries: http://www.phidgets.com/docs/Language_-_Python#Linux

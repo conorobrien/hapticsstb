@@ -35,7 +35,7 @@ class EmptyPacketError(Exception):
 # Class for the Haptics STB. Manages initialization, stop, start and reading raw serial packets
 class STB(object):
 
-    def __init__(self, sample_rate, STB='', pedal=False, video=''):
+    def __init__(self, sample_rate, STB='', pedal=False):
 
         # STB init
         if STB == '':
@@ -55,6 +55,7 @@ class STB(object):
             self.pedal_dev.timeout = 0
         else:
             self._pedal = False
+            self.pedal_dev = None
 
         if sample_rate > 3000:
             print 'Sampling Rate too high!'
@@ -76,9 +77,9 @@ class STB(object):
         self.video_thread = None
         self.cap = None
 
-    def video_init(video_filename):
+    def video_init(self, video_filename):
 
-        if not self.video #If this is the first time it's been called
+        if not self.video: #If this is the first time it's been called
             err = subprocess.call(['v4l2-ctl', '-i 4'])
             self.cap = VideoCapture(-1)
             if err == 1:
@@ -88,10 +89,24 @@ class STB(object):
 
         fourcc = CV_FOURCC(*'XVID')
 
-        out = VideoWriter(video, fourcc, 29.970, (720, 480))
+        out = VideoWriter(video_filename, fourcc, 29.970, (720, 480))
         self.video_thread = OpenCVThread(self.cap, out)
         self.video = True
 
+    def plot_init(self, plot_type, plot_length):
+        self.update_rate(500)
+        line_length = self.sample_rate*plot_length
+        self.plot_objects = plotting_setup(plot_type, line_length)
+        self.plot_type = plot_type
+        self.frame = 1
+
+        if self.plot_type in [PLOT_FT, PLOT_M40V, PLOT_POS]:
+            self.plot_data = np.zeros((line_length, 6))
+        elif self.plot_type == PLOT_ACC:
+            self.plot_data = np.zeros((line_length, 9))
+        else:
+            print "Unrecognized plotting type!"
+            sys.exit()
 
     def update_rate(self, sample_rate):
         self.sample_rate = sample_rate
@@ -164,21 +179,6 @@ class STB(object):
     def get_acc(self):
         return hapticsstb_rt.serial_acc(self.pack)
 
-    def plot_init(self, plot_type, plot_length):
-        self.update_rate(500)
-        line_length = self.sample_rate*plot_length
-        self.plot_objects = plotting_setup(plot_type, line_length)
-        self.plot_type = plot_type
-        self.frame = 1
-
-        if self.plot_type in [PLOT_FT, PLOT_M40V, PLOT_POS]:
-            self.plot_data = np.zeros((line_length, 6))
-        elif self.plot_type == PLOT_ACC:
-            self.plot_data = np.zeros((line_length, 9))
-        else:
-            print "Unrecognized plotting type!"
-            sys.exit()
-
     def plot_update(self):
         if self.plot_type in [PLOT_FT, PLOT_POS]:
             new_data = self.get_m40()
@@ -207,7 +207,8 @@ class STB(object):
     def close(self):
         self.stop_sampling()
         self.STB_dev.close()
-        self.pedal_dev.close()
+        if self._pedal:
+            self.pedal_dev.close()
 
 class OpenCVThread(threading.Thread):
     def __init__(self, cap, out):
@@ -277,7 +278,7 @@ def plotting_setup(plot_type, line_length):
     #Accelerometer Voltage Graphing
     elif plot_type == PLOT_ACC:
 
-        (ax1, ax2, ax3) = pl.subplots(3, 1, sharex=True)
+        f, (ax1, ax2, ax3) = pl.subplots(3, 1, sharex=True)
 
         ax1.axis([start_time, 0, -7, 7])
         ax2.axis([start_time, 0, -7, 7])
@@ -296,6 +297,7 @@ def plotting_setup(plot_type, line_length):
         a3y_line, = ax3.plot(times, [0] * line_length, color='g')
         a3z_line, = ax3.plot(times, [0] * line_length, color='b')
 
+        pl.legend([a1x_line, a1y_line, a1z_line], ['X', 'Y', 'Z'], loc=2)
         plot_objects = (a1x_line, a1y_line, a1z_line, a2x_line, a2y_line, a2z_line,
                         a3x_line, a3y_line, a3z_line)
 

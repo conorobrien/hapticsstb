@@ -31,10 +31,9 @@ parser.add_argument("--sample_time", type=float, default=30, help="Length of tri
 
 args = parser.parse_args()
 
-if args.write or args.video:
-    data_dir = 'TestData'
-    subject_dir = 'Subject'+args.subject.zfill(3)
-    test_filename =  'S' + args.subject.zfill(3) + 'T' + args.task.zfill(2) +'_' + time.strftime('%m-%d_%H-%M')
+def create_filename(subject, filename, data_dir):
+    subject_dir = 'Subject'+subject.zfill(3)
+    test_filename =  'S' + subject.zfill(3) + 'T' + task.zfill(2) +'_' + time.strftime('%m-%d_%H-%M')
     test_path = data_dir + '/' + subject_dir + '/' + test_filename
 
     if [] == glob.glob(data_dir):
@@ -44,10 +43,8 @@ if args.write or args.video:
         print "MAKING " + subject_dir
         os.mkdir(data_dir + '/' + subject_dir)
 
-if args.video:
-    video_filename = test_filename + '.avi'
-else:
-    video_filename = ''
+    return test_filename
+
 
 sensor = hapticsstb.STB(args.sample_rate, pedal=args.pedal, video=video_filename)
 
@@ -70,47 +67,60 @@ print sensor.bias_vector
 print "Done!"
 print '*'*80
 
+while args.pedal # Runs once if args.pedal is false
+    if args.write or args.video:
+        test_filename = create_filename(args.subject, args.filename, 'TestData')
 
+    if args.video:
+        video_filename = test_filename + '.avi'
+        sensor.video_init(video_filename)
 
-# Block until single pedal press
-if args.pedal:
-    print "Waiting for Pedal Input"
+    # Block until single pedal press if using pedal
+    if args.pedal:
+        print "Waiting for Pedal Input"
 
-    while sensor.pedal() != 1:
-        pass
-
-else:
-    print 'Starting ' + str(args.sample_time) ' second trial'
-
-print '*'*80
-print "Starting Sampling ..."
-sensor.start_sampling()
-
-try:
-    for ii in range(0,sample_length):
-        sensor_hist[ii, 0:15] = sensor.read_data()
-        if args.plot:
-            sensor.plot_update()
-
-        if args.pedal:
-            if sensor.pedal() == 2:
-                print "Pedal Break, Finishing Testing"
-                print '*'*80
-                break
+        while True:
+            pedal = start.pedal()
+            if pedal == 1:
+                pass
+            elif pedal == 3:
+                print "Quitting!"
+                sys.exit()
 
     else:
-        if args.pedal:
-            print "Time Limit Reached! " + str(args.sample_time) + "s limit, adjust in code if needed"
-            print '*'*80
+        print 'Starting ' + str(args.sample_time) ' second trial'
 
-except KeyboardInterrupt: # This lets you ctrl-c out of the sampling loop safely
-    pass
+    print '*'*80
+    print "Starting Sampling ..."
+    sensor.start_sampling()
 
-except:
-    sensor.close()
-    raise
+    try:
+        for ii in range(0,sample_length):
+            sensor_hist[ii, 0:15] = sensor.read_data()
+            if args.plot:
+                sensor.plot_update()
+
+            if args.pedal:
+                if sensor.pedal() == 2:
+                    print "Pedal Break, Finishing Testing"
+                    print '*'*80
+                    break
+
+        else:
+            if args.pedal:
+                print "Time Limit Reached! " + str(args.sample_time) + "s limit, adjust in code if needed"
+                print '*'*80
+
+    except KeyboardInterrupt: # This lets you ctrl-c out of the sampling loop safely, also breaks out of while loop
+        break
+
+    except:
+        sensor.close()
+        raise
+
+    sensor.stop_sampling()
+    
+    if args.write:
+        np.savetxt(test_filename + '.csv', sensor_hist[:(ii+1),0:15], delimiter=",")
 
 sensor.close()
-
-if args.write:
-    np.savetxt(test_filename + '.csv', sensor_hist[:(ii+1),0:15], delimiter=",")

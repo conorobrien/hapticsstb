@@ -56,23 +56,6 @@ class STB(object):
         else:
             self._pedal = False
 
-        # Video Init
-        if video:
-            self.video = True
-            err = subprocess.call(['v4l2-ctl', '-i 4'])
-            if err == 1:
-                print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
-                sys.exit()
-
-            cap = VideoCapture(-1)
-            fourcc = CV_FOURCC(*'XVID')
-
-            out = VideoWriter(video, fourcc, 29.970, (720, 480))
-            self.video_thread = OpenCVThread(cap, out)
-
-        else:
-            self.video = False
-
         if sample_rate > 3000:
             print 'Sampling Rate too high!'
             raise ValueError
@@ -88,6 +71,27 @@ class STB(object):
         self.plot_objects = None
         self.plot_type = 0
         self.plot_data = None
+
+        self.video = False
+        self.video_thread = None
+        self.cap = None
+
+    def video_init(video_filename):
+
+        if not self.video #If this is the first time it's been called
+            err = subprocess.call(['v4l2-ctl', '-i 4'])
+            self.cap = VideoCapture(-1)
+            if err == 1:
+                print "VIDEO CAPTURE ERROR, CHECK CARD AND TRY AGAIN"
+                sys.exit()
+
+
+        fourcc = CV_FOURCC(*'XVID')
+
+        out = VideoWriter(video, fourcc, 29.970, (720, 480))
+        self.video_thread = OpenCVThread(self.cap, out)
+        self.video = True
+
 
     def update_rate(self, sample_rate):
         self.sample_rate = sample_rate
@@ -203,6 +207,7 @@ class STB(object):
     def close(self):
         self.stop_sampling()
         self.STB_dev.close()
+        self.pedal_dev.close()
 
 class OpenCVThread(threading.Thread):
     def __init__(self, cap, out):

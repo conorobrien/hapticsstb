@@ -2,7 +2,7 @@
 # Install Phidget Libraries: http://www.phidgets.com/docs/OS_-_Linux#Getting_Started_with_Linux
 # Install Phidget Python libraries: http://www.phidgets.com/docs/Language_-_Python#Linux
 # Test Phidget with demo code: http://www.phidgets.com/downloads/examples/Python.zip
-# Make sure it works with demo code, this is pretty basic
+# Make sure it works with demo code, this code is pretty basic
 
 # Phidget Python API reference: http://www.phidgets.com/documentation/web/PythonDoc/Phidgets.html
 

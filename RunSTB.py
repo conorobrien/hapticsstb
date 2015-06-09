@@ -35,7 +35,7 @@ args = parser.parse_args()
 
 def create_filename(subject, task, data_dir):
     subject_dir = 'Subject'+subject.zfill(3)
-    test_filename =  'S' + subject.zfill(3) + 'T' + task.zfill(2) +'_' + time.strftime('%m-%d_%H-%M')
+    test_filename =  'S' + subject.zfill(3) + 'T' + task +'_' + time.strftime('%m-%d_%H-%M')
     test_path = data_dir + '/' + subject_dir + '/' + test_filename
 
     if [] == glob.glob(data_dir):
@@ -57,7 +57,7 @@ if args.plot:
 if not args.pedal:
     sample_length = sensor.sample_rate*args.sample_time
 else:
-    sample_time = 600
+    sample_time = 1800
     sample_length = sensor.sample_rate*sample_time
 
 sensor_hist = np.zeros((sample_length,15))

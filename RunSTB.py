@@ -5,6 +5,8 @@ import glob
 import os
 import sys
 import time
+import termios
+import fcntl
 
 import numpy as np
 import hapticsstb
@@ -16,22 +18,33 @@ parser.add_argument("-t", "--task", type=str, default='1', help="Task ID Number"
 
 parser.add_argument("-p", "--plot", type=int, default=0, choices=[1,2,3,4],
                     help=
-"""Set sample rate to 500Hz and display line plots for\ndebugging
+"""Set sample rate to 500Hz and display line plots for
+debugging
     1: F/T graph
     2: Mini40 Channel Voltages
     3: Accelerometer Gs
-    4: Single Point Plate Position
+    4: Single Point Position
 """)
 
 parser.add_argument("--sample_rate", type=int, default=3000, help="STB sampling rate (default 3kHz, 500Hz if plotting)")
 parser.add_argument("--sample_time", type=int, default=10, help="Length of trial run in sec (overridden if pedal active)")
 
+parser.add_argument("--keyboard", default=False, action="store_true", help="Use keyboard to start and stop trials")
 parser.add_argument("--no_pedal", dest="pedal", default=True, action="store_false", help="Don't use pedal to start and stop trials")
 parser.add_argument("--no_video", dest="video", default=True, action="store_false", help="Don't record video")
 parser.add_argument("--no_write", dest="write", default=True, action="store_false", help="Don't write data to disk")
 
-
 args = parser.parse_args()
+
+if args.keyboard:
+    args.pedal = False
+    oldterm = termios.tcgetattr(fd)
+    newattr = termios.tcgetattr(fd)
+    newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
+    termios.tcsetattr(fd, termios.TCSANOW, newattr)
+
+    oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
 
 def create_filename(subject, task, data_dir):
     subject_dir = 'Subject'+subject.zfill(3)
@@ -47,7 +60,6 @@ def create_filename(subject, task, data_dir):
 
     return test_path
 
-
 sensor = hapticsstb.STB(args.sample_rate, pedal=args.pedal)
 
 if args.plot:
@@ -60,7 +72,7 @@ else:
     sample_time = 1800
     sample_length = sensor.sample_rate*sample_time
 
-sensor_hist = np.zeros((sample_length,15))
+sensor_hist = np.zeros((sample_length, 15))
 
 print '*'*80
 print "Biasing, make sure board is clear"
@@ -71,13 +83,6 @@ print '*'*80
 
 while True: # Runs once if args.pedal is false
     try:
-
-        if args.write or args.video:
-            test_filename = create_filename(args.subject, args.task, 'TestData')
-
-        if args.video:
-            video_filename = test_filename + '.avi'
-            sensor.video_init(video_filename)
 
         # Block until single pedal press if using pedal
         if args.pedal:
@@ -90,6 +95,26 @@ while True: # Runs once if args.pedal is false
                 elif pedal == 3:
                     print "Quitting!"
                     sys.exit()
+
+        elif args.keyboard:
+            print "Waiting for Keyboard Input (space to start/stop, q to quit)"
+
+            while True:
+                try:
+                    keypress = sys.stdin.read(1)
+                    if keypress == ' ':
+                        break
+                    elif keypress == 'q':
+                        print "Quitting!"
+                        sys.exit()
+                except IOError: pass
+
+        if args.write or args.video:
+            test_filename = create_filename(args.subject, args.task, 'TestData')
+
+        if args.video:
+            video_filename = test_filename + '.avi'
+            sensor.video_init(video_filename)
 
         else:
             print "Starting " + str(args.sample_time) + " second trial"
@@ -108,6 +133,13 @@ while True: # Runs once if args.pedal is false
                     print "Pedal Break ..."
                     print '*'*80
                     break
+            elif args.keyboard:
+                try:
+                    if sys.stdin.read(1) == ' '
+                        print "Key Break ..."
+                        print '*'*80
+                        break
+                except IOError: pass
 
         else:
             if args.pedal:
@@ -118,7 +150,11 @@ while True: # Runs once if args.pedal is false
         break
 
     except:
+        print "Closing Serial Port ..."
         sensor.close()
+        if args.keyboard:
+            termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
+            fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
         raise
 
     print 'Finished Sampling!'
@@ -135,3 +171,6 @@ while True: # Runs once if args.pedal is false
         break
 
 sensor.close()
+if args.keyboard:
+    termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
+    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)

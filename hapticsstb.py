@@ -137,6 +137,7 @@ class STB(object):
 
         if self.video:
             self.video_thread.stop.set()
+            self.video_thread = None
 
     def read_packet(self):
         pack = self.STB_dev.read(31)
@@ -194,6 +195,7 @@ class STB(object):
             self.frame = 1
         else:
             self.frame += 1
+
     def pedal(self):
         if not self._pedal:
             return 0

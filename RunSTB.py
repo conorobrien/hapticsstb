@@ -38,6 +38,7 @@ args = parser.parse_args()
 
 if args.keyboard:
     args.pedal = False
+    fd = sys.stdin.fileno()
     oldterm = termios.tcgetattr(fd)
     newattr = termios.tcgetattr(fd)
     newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO

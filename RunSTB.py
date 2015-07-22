@@ -143,7 +143,7 @@ while True: # Runs once if args.pedal is false
                 except IOError: pass
 
         else:
-            if args.pedal:
+            if args.pedal or args.keyboard:
                 print "Time Limit Reached! " + str(args.sample_time) + "s limit, adjust in code if needed"
                 print '*'*80
 

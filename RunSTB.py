@@ -135,7 +135,7 @@ while True: # Runs once if args.pedal is false
                     break
             elif args.keyboard:
                 try:
-                    if sys.stdin.read(1) == ' '
+                    if sys.stdin.read(1) == ' ':
                         print "Key Break ..."
                         print '*'*80
                         break

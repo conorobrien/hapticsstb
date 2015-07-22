@@ -135,7 +135,7 @@ class STB(object):
         self.STB_dev.write(STOP)
         self.STB_dev.flush()
 
-        if self.video:
+        if self.video and not self.video_thread == None:
             self.video_thread.stop.set()
             self.video_thread = None
 

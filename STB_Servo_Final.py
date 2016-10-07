@@ -1,3 +1,4 @@
+from __future__ import division
 #!/usr/bin/env python
 
 ## BEFORE RUNNING ON NEW COMPUTER
@@ -7,9 +8,11 @@
 # Make sure it works with demo code, this code is pretty basic
 
 # Phidget Python API reference: http://www.phidgets.com/documentation/web/PythonDoc/Phidgets.html
-
+import csv
 import time
-
+import os
+import datetime
+import time
 import numpy as np
 import hapticsstb
 
@@ -18,8 +21,8 @@ import math
 
 from Phidgets.PhidgetException import PhidgetErrorCodes, PhidgetException
 from Phidgets.Devices.AdvancedServo import AdvancedServo
-
-FORCE_SCALE  = 0.1
+#Do Not Make Force_Scale less than 1
+FORCE_SCALE  = 1
 def Error(e):
     try:
         source = e.device
@@ -40,8 +43,8 @@ try:
 	motor = 0
 	servo.setEngaged(0, True)
 	servo.setEngaged(1, True)
-	servo_min = servo.getPositionMin(motor) + 130
-	servo_max = servo.getPositionMax(motor) - 30
+	servo_min = servo.getPositionMin(motor) + 100
+	servo_max = servo.getPositionMin(motor) + 150
 	servo_mid = (servo_max - servo_min)/2
 	servo.setAcceleration(1, 500)
 	servo.setAcceleration(motor, 500) # I just picked these to be smooth, feel free to change
@@ -53,20 +56,23 @@ except PhidgetException as e:
     exit(1)
 
 # Set up STB
-sample_rate = 25 # This works best with low sampling rates
+sample_rate = 50 # This works best with low sampling rates
 
 # Call STB's constructer (init)
 sensor = hapticsstb.STB(sample_rate)
 
-sensor.bias() # Tares the sensor, make sure that nothing's touching the boardcr
+sensor.bias() # Tares the sensor, make sure that nothing's touching the bordcr
 print sensor.bias_vector
 
 run_time = 500
-volt = 5.0
+volt = 3.3
 start_time = time.time()
 sensor.start_sampling() # Starts the STB hardware sampling loop
 try:
-   while time.time() - start_time <= run_time:
+    fname = time.strftime("%H_%M_%S_%m_%d_%Y")
+    newdir = "/home/haptics/joshdata/" 
+    os.chdir(newdir)
+    while time.time() - start_time <= run_time:
         # read_M40 returns [Fx, Fy, Fz, Tx, Ty, Tz]
 	sensor_data = sensor.read_m40()
 	handedness = sensor.read_acc()
@@ -75,22 +81,59 @@ try:
 	#print sensor_data[0]
 	#print sensor_data[1]
 	#print sensor_data[2]
+	mag = (sensor_data[0]**2 + sensor_data[1]**2 + sensor_data[2]**2) ** (1/2)
+	#print handedness[0],handedness[1],mag
+	conv = (5/7)
+	pos = servo_min + (mag * ((servo_max - servo_min)*conv) / FORCE_SCALE)
+	#pos = servo_max;
+	#eric = (pos, "left")
+	#josh = (pos, "right")
 	
+	#hand one
+	if mag > 0.1:
+		if handedness[0] < volt:
+		# Scale force to +- 30N for whole range of servo
+			if pos <= servo_max and pos >= servo_min:
+				servo.setPosition(0, pos)
+			elif pos > servo_max:
+				servo.setPosition(0, servo_max)
+			elif pos < servo_min:
+				servo.setPosition(0, servo_min)
 	
-	pos = servo_min + ((sensor_data[0]**2 + sensor_data[1]**2 + sensor_data[2]**2)**1/2)*(servo_max - servo_min)/FORCE_SCALE
-	if handedness[0] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(0, pos)
-	elif handedness[0] and pos > servo_max:
-		servo.setPosition(0, servo_max)
-	elif handedness[0] and pos < servo_min:
-		servo.setPosition(0, servo_min)
-	if handedness[1] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(1, pos)
-	elif handedness[1] and pos > servo_max:
-		servo.setPosition(1, servo_max)
-	elif handedness[1] and pos < servo_min:
-		servo.setPosition(1, servo_min)
+	#hand two
+		if handedness[1] < volt:
+			if pos <= servo_max and pos >= servo_min:
+				servo.setPosition(1, pos)
+			elif pos > servo_max:
+				servo.setPosition(1, servo_max)
+			elif pos < servo_min:
+				servo.setPosition(1, servo_min)
+	#Both Hands
+		if handedness[0] > volt and handedness[1] > volt:
+			if pos <= servo_max and pos >= servo_min:
+				servo.setPosition(0, pos)
+				servo.setPosition(1, pos)
+			elif pos > servo_max:
+				servo.setPosition(0, servo_max)
+				servo.setPosition(1, servo_max)
+			elif pos < servo_min:
+				servo.setPosition(0, servo_min)
+				servo.setPosition(1, servo_min)
 
+	else:
+		servo.setPosition(1, servo_min)
+		servo.setPosition(0, servo_min)
+
+ 	cat = (pos, time.time()-start_time, sensor_data[0], sensor_data[1], sensor_data[2])
+#sensor_data[0] is force in x
+#sensor_data[1] is force in y
+#sensor_data[2] is force in z
+
+        with open(fname + ".csv", "a") as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter = ',')
+            spamwriter.writerow(cat)
+
+	
         # Scale force to +- 30N for whole range of servo
 		#pos = servo_mid + (sensor_data[2])*(servo_max - servo_mid)/FORCE_SCALE
 		#if pos <= servo_max and pos >= servo_min:
@@ -104,9 +147,7 @@ try:
 		#	servo.setPosition(motor, servo_min)
 		#	servo.setPosition(1, servo_min)
 		# print( "Sensor data: " + str(sensor_data) );
-		
-
-
+       
 except KeyboardInterrupt:
     pass
 
@@ -116,9 +157,13 @@ except PhidgetException as e:
     exit(1)
 
 except:
+	servo.setPosition(1, servo_min)
+	servo.setPosition(0, servo_min)
 	sensor.close() # Need to run this when you're done, stops STB and closes serial port
 	servo.closePhidget()
 	raise
 
+servo.setPosition(1, servo_min)
+servo.setPosition(0, servo_min)
 sensor.close()
 servo.closePhidget()

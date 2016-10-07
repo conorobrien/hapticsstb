@@ -78,18 +78,21 @@ try:
 	
 	
 	pos = servo_min + ((sensor_data[0]**2 + sensor_data[1]**2 + sensor_data[2]**2)**1/2)*(servo_max - servo_min)/FORCE_SCALE
-	if handedness[0] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(0, pos)
-	elif handedness[0] and pos > servo_max:
-		servo.setPosition(0, servo_max)
-	elif handedness[0] and pos < servo_min:
-		servo.setPosition(0, servo_min)
-	if handedness[1] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(1, pos)
-	elif handedness[1] and pos > servo_max:
-		servo.setPosition(1, servo_max)
-	elif handedness[1] and pos < servo_min:
-		servo.setPosition(1, servo_min)
+	if handedness[0] < volt:
+		# Scale force to +- 30N for whole range of servo
+		if pos <= servo_max and pos >= servo_min:
+			servo.setPosition(0, pos)
+		elif pos > servo_max:
+			servo.setPosition(0, servo_max)
+		elif pos < servo_min:
+			servo.setPosition(0, servo_min)
+	if handedness[1] < volt:
+		if pos <= servo_max and pos >= servo_min:
+			servo.setPosition(1, pos)
+		elif pos > servo_max:
+			servo.setPosition(1, servo_max)
+		elif pos < servo_min:
+			servo.setPosition(1, servo_min)
 
         # Scale force to +- 30N for whole range of servo
 		#pos = servo_mid + (sensor_data[2])*(servo_max - servo_mid)/FORCE_SCALE

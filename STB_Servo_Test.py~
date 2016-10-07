@@ -13,13 +13,10 @@ import time
 import numpy as np
 import hapticsstb
 
-import math 
-
-
 from Phidgets.PhidgetException import PhidgetErrorCodes, PhidgetException
 from Phidgets.Devices.AdvancedServo import AdvancedServo
 
-FORCE_SCALE  = 0.1
+FORCE_SCALE  = 10
 def Error(e):
     try:
         source = e.device
@@ -40,8 +37,8 @@ try:
 	motor = 0
 	servo.setEngaged(0, True)
 	servo.setEngaged(1, True)
-	servo_min = servo.getPositionMin(motor) + 130
-	servo_max = servo.getPositionMax(motor) - 30
+	servo_min = servo.getPositionMin(motor) + 5
+	servo_max = servo.getPositionMax(motor) - 5
 	servo_mid = (servo_max - servo_min)/2
 	servo.setAcceleration(1, 500)
 	servo.setAcceleration(motor, 500) # I just picked these to be smooth, feel free to change
@@ -61,8 +58,8 @@ sensor = hapticsstb.STB(sample_rate)
 sensor.bias() # Tares the sensor, make sure that nothing's touching the boardcr
 print sensor.bias_vector
 
-run_time = 500
-volt = 5.0
+run_time = 30
+
 start_time = time.time()
 sensor.start_sampling() # Starts the STB hardware sampling loop
 try:
@@ -70,26 +67,25 @@ try:
         # read_M40 returns [Fx, Fy, Fz, Tx, Ty, Tz]
 	sensor_data = sensor.read_m40()
 	handedness = sensor.read_acc()
-	#print("left hand" + str((handedness[0])))
-	#print("right hand" + str((handedness[1])))
-	#print sensor_data[0]
-	#print sensor_data[1]
-	#print sensor_data[2]
-	
-	
-	pos = servo_min + ((sensor_data[0]**2 + sensor_data[1]**2 + sensor_data[2]**2)**1/2)*(servo_max - servo_min)/FORCE_SCALE
-	if handedness[0] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(0, pos)
-	elif handedness[0] and pos > servo_max:
-		servo.setPosition(0, servo_max)
-	elif handedness[0] and pos < servo_min:
-		servo.setPosition(0, servo_min)
-	if handedness[1] < volt and pos <= servo_max and pos >= servo_min:
-		servo.setPosition(1, pos)
-	elif handedness[1] and pos > servo_max:
-		servo.setPosition(1, servo_max)
-	elif handedness[1] and pos < servo_min:
-		servo.setPosition(1, servo_min)
+	print("left hand" + str((handedness[0])))
+	print("right hand" + str((handedness[1])))
+	volt = 5.0
+	pos = servo_mid + (sensor_data[2])*(servo_max - servo_mid)/FORCE_SCALE
+	if handedness[0] < volt:
+		# Scale force to +- 30N for whole range of servo
+		if pos <= servo_max and pos >= servo_min:
+			servo.setPosition(motor, pos)
+		elif pos > servo_max:
+			servo.setPosition(motor, servo_max)
+		elif pos < servo_min:
+			servo.setPosition(motor, servo_min)
+	if handedness[1] < volt:
+		if pos <= servo_max and pos >= servo_min:
+			servo.setPosition(1, pos)
+		elif pos > servo_max:
+			servo.setPosition(1, servo_max)
+		elif pos < servo_min:
+			servo.setPosition(1, servo_min)
 
         # Scale force to +- 30N for whole range of servo
 		#pos = servo_mid + (sensor_data[2])*(servo_max - servo_mid)/FORCE_SCALE
@@ -104,7 +100,6 @@ try:
 		#	servo.setPosition(motor, servo_min)
 		#	servo.setPosition(1, servo_min)
 		# print( "Sensor data: " + str(sensor_data) );
-		
 
 
 except KeyboardInterrupt:

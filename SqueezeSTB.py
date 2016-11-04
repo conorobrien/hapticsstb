@@ -60,7 +60,7 @@ if args.keyboard:
 
 def create_filename(subject, task, data_dir):
     subject_dir = 'Subject'+subject.zfill(3)
-    test_filename =  'S' + subject.zfill(3) + 'T' + task +'_' + time.strftime('%m-%d_%H-%M')
+    test_filename =  'S' + subject.zfill(3) + 'TrainFB' + task +'_' + time.strftime('%m-%d_%H-%M')
     test_path = data_dir + '/' + subject_dir + '/' + test_filename
 
     if [] == glob.glob(data_dir):
@@ -125,7 +125,7 @@ else:
     sample_time = 1800
     sample_length = sensor.sample_rate*sample_time
 
-sensor_hist = np.zeros((sample_length, 15))
+sensor_hist = np.zeros((sample_length, 17))
 
 print '*'*80
 print "Biasing, make sure board is clear"
@@ -189,7 +189,6 @@ while True: # Runs once if args.pedal is false
 
 
 		for ii in range(0,sample_length):
-			sensor_hist[ii, 0:15] = sensor.read_data()
 			sensor_data = sensor.read_m40()
 			handedness = sensor.read_acc()
 			#print("left hand" + str((handedness[0])))
@@ -204,6 +203,8 @@ while True: # Runs once if args.pedal is false
 			#pos = servo_max;
 			#eric = (pos, "left")
 			#josh = (pos, "right")
+			#sensor_hist[ii, 0:15] = sensor.read_data()
+			sensor_hist[ii,:] = np.hstack((sensor.read_data(),[pos,mag]))	
 	
 			
 			if mag > 0.1:
@@ -247,12 +248,16 @@ while True: # Runs once if args.pedal is false
 				if sensor.pedal() == 2:
 					print "Pedal Break ..."
 					print '*'*80
+					servo.setPosition(1, servo_min)
+					servo.setPosition(0, servo_min)
 					break
 			elif args.keyboard:
 				try:
 					if sys.stdin.read(1) == ' ':
 						print "Key Break ..."
 						print '*'*80
+						servo.setPosition(1, servo_min)
+						servo.setPosition(0, servo_min)
 						break
 				except IOError: pass
 
@@ -307,7 +312,7 @@ while True: # Runs once if args.pedal is false
 	sensor.stop_sampling()
 
  	if args.write:
-		np.savetxt(test_filename + '.csv', sensor_hist[:(ii+1),0:15], delimiter=",")
+		np.savetxt(test_filename + '.csv', sensor_hist[:(ii+1),0:17], delimiter=",")
 		print 'Finished Writing!'
 
     	print '*'*80
